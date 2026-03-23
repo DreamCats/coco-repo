@@ -19,13 +19,13 @@ var forceInit bool
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "初始化仓库知识库",
-	Long:  "扫描仓库结构、核心类型、RPC 接口，生成 .context/ 下的知识文件（glossary.md, architecture.md, patterns.md, gotchas.md）。",
+	Long:  "扫描仓库结构、核心类型、RPC 接口，生成 .livecoding/context/ 下的知识文件（glossary.md, architecture.md, patterns.md, gotchas.md）。",
 	RunE:  runInit,
 }
 
 func init() {
 	rootCmd.AddCommand(initCmd)
-	initCmd.Flags().BoolVarP(&forceInit, "force", "f", false, "强制覆盖已有的 .context/ 目录")
+	initCmd.Flags().BoolVarP(&forceInit, "force", "f", false, "强制覆盖已有的 .livecoding/context/ 目录")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -39,10 +39,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("当前目录不是 git 仓库: %s", repoRoot)
 	}
 
-	// 检查 .context/ 是否已存在
+	// 检查 .livecoding/context/ 是否已存在
 	contextDir := filepath.Join(repoRoot, config.ContextDir)
 	if _, err := os.Stat(contextDir); err == nil && !forceInit {
-		return fmt.Errorf(".context/ 已存在，使用 --force 强制覆盖")
+		return fmt.Errorf(".livecoding/context/ 已存在，使用 --force 强制覆盖")
 	}
 
 	// 1. 扫描仓库
@@ -54,7 +54,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  发现 %d 个包, %d 个导出类型, %d 个 IDL 文件\n",
 		len(scanResult.GoPackages), len(scanResult.GoTypes), len(scanResult.RPCFiles))
 
-	// 2. 创建 .context/ 目录
+	// 2. 创建 .livecoding/context/ 目录
 	if err := knowledge.EnsureDir(repoRoot); err != nil {
 		return err
 	}

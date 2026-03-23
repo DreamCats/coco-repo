@@ -35,10 +35,10 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("获取当前目录失败: %w", err)
 	}
 
-	// 检查 .context/ 是否存在
+	// 检查 .livecoding/context/ 是否存在
 	contextDir := filepath.Join(repoRoot, config.ContextDir)
 	if _, err := os.Stat(contextDir); err != nil {
-		return fmt.Errorf(".context/ 不存在，请先运行 coco-repo init")
+		return fmt.Errorf(".livecoding/context/ 不存在，请先运行 coco-repo init")
 	}
 
 	// 1. 获取 git diff

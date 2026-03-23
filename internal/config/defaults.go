@@ -9,8 +9,8 @@ const (
 	// DefaultModel 默认使用的 AI 模型
 	DefaultModel = "Doubao-Seed-2.0-Code"
 
-	// ContextDir 知识库目录名（在仓库根目录下）
-	ContextDir = ".context"
+	// ContextDir 知识库目录（在仓库根目录下）
+	ContextDir = ".livecoding/context"
 )
 
 // DefaultConfigDir 返回用户级配置目录

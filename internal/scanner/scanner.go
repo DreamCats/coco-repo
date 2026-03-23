@@ -83,7 +83,7 @@ func (r *ScanResult) Summary() string {
 // scanDirTree 扫描目录树（排除隐藏目录、vendor 等）
 func scanDirTree(root string, result *ScanResult) error {
 	skipDirs := map[string]bool{
-		".git": true, ".context": true, "vendor": true, "node_modules": true,
+		".git": true, ".livecoding": true, "vendor": true, "node_modules": true,
 		"kitex_gen": true, "dist": true, ".idea": true, ".vscode": true,
 	}
 

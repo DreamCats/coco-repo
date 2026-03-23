@@ -16,7 +16,9 @@ type Generator struct {
 
 // New 创建生成器，连接 coco daemon
 func New(repoPath string) (*Generator, error) {
-	conn, err := daemon.Dial(repoPath, nil)
+	conn, err := daemon.Dial(repoPath, &daemon.DialOption{
+		ConfigDir: config.DefaultConfigDir(),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("连接 coco daemon 失败: %w", err)
 	}

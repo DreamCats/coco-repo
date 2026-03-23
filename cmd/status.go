@@ -15,7 +15,7 @@ import (
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "查看知识库状态",
-	Long:  "显示 .context/ 下各知识文件的状态、条目数量和覆盖率。",
+	Long:  "显示 .livecoding/context/ 下各知识文件的状态、条目数量和覆盖率。",
 	RunE:  runStatus,
 }
 
@@ -35,12 +35,12 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if !st.Exists {
-		color.Yellow(".context/ 目录不存在，请先运行 coco-repo init")
+		color.Yellow(".livecoding/context/ 目录不存在，请先运行 coco-repo init")
 		return nil
 	}
 
 	fmt.Println()
-	color.Cyan(".context/ 知识库状态")
+	color.Cyan(".livecoding/context/ 知识库状态")
 	fmt.Println("──────────────────────────────")
 
 	existCount := 0

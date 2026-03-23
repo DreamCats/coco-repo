@@ -8,7 +8,7 @@
 
 ## 1. 项目定位
 
-coco-repo 是一个仓库级代码上下文知识库生成工具。CLI 命令名为 `coco-repo`。通过调用 coco ACP 的代码理解能力，自动扫描分析目标仓库，生成并维护 `.context/` 目录下的业务知识文件，让后续 AI 编码具备业务上下文。
+coco-repo 是一个仓库级代码上下文知识库生成工具。CLI 命令名为 `coco-repo`。通过调用 coco ACP 的代码理解能力，自动扫描分析目标仓库，生成并维护 `.livecoding/context/` 目录下的业务知识文件，让后续 AI 编码具备业务上下文。
 
 ## 2. 核心命令
 
@@ -24,7 +24,7 @@ coco-repo 是一个仓库级代码上下文知识库生成工具。CLI 命令名
 ## 3. 知识文件结构
 
 ```
-.context/
+.livecoding/context/
 ├── glossary.md          # 业务术语 <-> 代码标识符映射（核心）
 ├── architecture.md      # 仓库架构概览（目录结构、分层、技术栈）
 ├── patterns.md          # 代码模式（Handler/Service/Converter 骨架）
@@ -51,7 +51,7 @@ coco-repo/
 │   ├── generator/                  # 知识文件生成（核心）
 │   │   ├── generator.go            # 调 coco-acp-sdk 让 AI 生成/更新内容
 │   │   └── prompts.go              # 各知识文件的 prompt 模板
-│   ├── knowledge/                  # .context/ 文件读写
+│   ├── knowledge/                  # .livecoding/context/ 文件读写
 │   │   ├── reader.go               # 解析已有知识文件
 │   │   └── writer.go               # 写入/更新知识文件
 │   └── config/                     # 硬编码配置
@@ -112,10 +112,10 @@ conn, err := daemon.Dial(repoPath, config.DefaultDialOption())
 **流程：**
 
 1. 检查当前目录是否为 git 仓库
-2. 检查 `.context/` 是否已存在（已存在则提示是否覆盖）
+2. 检查 `.livecoding/context/` 是否已存在（已存在则提示是否覆盖）
 3. 调用 `scanner` 扫描仓库结构（目录树、Go 类型、RPC 接口、import 关系）
 4. 将扫描结果作为上下文，调用 `generator` 通过 coco ACP 逐个生成知识文件
-5. 写入 `.context/` 目录
+5. 写入 `.livecoding/context/` 目录
 6. 输出生成结果摘要
 
 **生成顺序：** glossary → architecture → patterns → gotchas（有依赖关系，术语表优先）
@@ -125,10 +125,10 @@ conn, err := daemon.Dial(repoPath, config.DefaultDialOption())
 **流程：**
 
 1. 读取最近 commit 的 git diff（或指定 commit 范围）
-2. 加载已有 `.context/` 知识文件
+2. 加载已有 `.livecoding/context/` 知识文件
 3. 判断 diff 影响哪些知识文件（新类型 → glossary，新目录 → architecture，新模式 → patterns）
 4. 仅对受影响的文件调用 `generator` 局部更新
-5. 写回 `.context/`
+5. 写回 `.livecoding/context/`
 
 **触发方式：** 可配置为 git commit hook（`post-commit`）或人工执行。
 
@@ -137,7 +137,7 @@ conn, err := daemon.Dial(repoPath, config.DefaultDialOption())
 **流程：**
 
 1. 接收查询关键词或术语
-2. 在 `.context/` 知识文件中搜索匹配内容
+2. 在 `.livecoding/context/` 知识文件中搜索匹配内容
 3. 返回结构化结果（术语定义、代码位置、相关模式等）
 
 **设计为 MCP 工具：** coco 编码时可通过 MCP 协议调用 `coco-repo query` 获取业务上下文，无需人工喂信息。
@@ -147,7 +147,7 @@ conn, err := daemon.Dial(repoPath, config.DefaultDialOption())
 **输出示例：**
 
 ```
-.context/ 知识库状态
+.livecoding/context/ 知识库状态
 ──────────────────────────
   glossary.md       32 条目  (28 已确认 / 4 待确认)
   architecture.md   已生成   最后更新: 2026-03-22
@@ -161,5 +161,5 @@ conn, err := daemon.Dial(repoPath, config.DefaultDialOption())
 
 - 用户文案、错误信息、注释全部使用中文
 - 文件权限：配置文件 `0600`，目录 `0700`
-- `.context/` 应纳入 git 版本管理，团队共享
+- `.livecoding/context/` 应纳入 git 版本管理，团队共享
 - commit message 风格与 byte-auth 保持一致

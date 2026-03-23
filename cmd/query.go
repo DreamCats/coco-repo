@@ -16,7 +16,7 @@ var queryFile string
 var queryCmd = &cobra.Command{
 	Use:   "query [关键词]",
 	Short: "查询知识库",
-	Long:  "在 .context/ 知识文件中搜索匹配内容，返回术语定义、代码位置、相关模式等。可作为 MCP 工具供 coco 调用。",
+	Long:  "在 .livecoding/context/ 知识文件中搜索匹配内容，返回术语定义、代码位置、相关模式等。可作为 MCP 工具供 coco 调用。",
 	Args:  cobra.MinimumNArgs(1),
 	RunE:  runQuery,
 }
@@ -40,7 +40,7 @@ func runQuery(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(files) == 0 {
-		return fmt.Errorf(".context/ 为空，请先运行 coco-repo init")
+		return fmt.Errorf(".livecoding/context/ 为空，请先运行 coco-repo init")
 	}
 
 	found := false
