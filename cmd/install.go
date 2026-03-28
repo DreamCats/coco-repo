@@ -37,6 +37,9 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		if err := installGitHook(repoRoot); err != nil {
 			return err
 		}
+		if err := installPreCommitHook(repoRoot); err != nil {
+			return err
+		}
 	}
 
 	if installSkills {
@@ -101,6 +104,54 @@ exit 0
 	}
 
 	color.Green("✓ pre-push hook 已安装")
+	return nil
+}
+
+// installPreCommitHook 安装 pre-commit hook
+func installPreCommitHook(repoRoot string) error {
+	color.Cyan("正在安装 pre-commit hook...")
+
+	hooksDir := filepath.Join(repoRoot, ".git", "hooks")
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		return fmt.Errorf("创建 hooks 目录失败: %w", err)
+	}
+
+	hookPath := filepath.Join(hooksDir, "pre-commit")
+	hookContent := `#!/bin/bash
+# coco-ext pre-commit hook
+# 自动格式化已修改的 .go 文件（goimports），保证 import 顺序一致
+
+# 获取暂存区中已修改的 .go 文件
+GO_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v '_test\.go$')
+if [ -z "$GO_FILES" ]; then
+    # 没有暂存的 .go 文件，跳过
+    exit 0
+fi
+
+# 检查 goimports 是否安装
+if ! command -v goimports &> /dev/null; then
+    echo "⚠ goimports 未安装，跳过格式化"
+    echo "  安装: go install golang.org/x/tools/cmd/goimports@latest"
+    exit 0
+fi
+
+# 格式化每个文件
+echo "$GO_FILES" | while read -r file; do
+    if [ -f "$file" ]; then
+        goimports -w "$file"
+        git add "$file"
+        echo "✓ 格式化: $file"
+    fi
+done
+
+exit 0
+`
+
+	if err := os.WriteFile(hookPath, []byte(hookContent), 0755); err != nil {
+		return fmt.Errorf("写入 hook 失败: %w", err)
+	}
+
+	color.Green("✓ pre-commit hook 已安装")
 	return nil
 }
 
