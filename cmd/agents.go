@@ -4,26 +4,26 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-
-	"github.com/DreamCats/coco-ext/internal/config"
-	"github.com/DreamCats/coco-ext/internal/knowledge"
 )
 
 var agentsForce bool
 
+const cocoExtSectionMarker = "## Coco-Ext 行为约束"
+
 var agentsCmd = &cobra.Command{
 	Use:   "agents",
 	Short: "生成 AGENTS.md 行为约束文件",
-	Long:  "生成 .livecoding/AGENTS.md，定义 AI 编码时的行为约束准则。",
+	Long:  "在仓库根目录生成或更新 AGENTS.md，定义 AI 编码时的行为约束准则。",
 	RunE:  runAgents,
 }
 
 func init() {
 	rootCmd.AddCommand(agentsCmd)
-	agentsCmd.Flags().BoolVarP(&agentsForce, "force", "f", false, "强制覆盖已有的 AGENTS.md")
+	agentsCmd.Flags().BoolVarP(&agentsForce, "force", "f", false, "强制重新生成 AGENTS.md（会覆盖已有的 Coco-Ext 约束）")
 }
 
 func runAgents(cmd *cobra.Command, args []string) error {
@@ -36,24 +36,24 @@ func runAgents(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("当前目录不是 git 仓库: %s", repoRoot)
 	}
 
-	contextDir := filepath.Join(repoRoot, config.ContextDir)
-	if err := knowledge.EnsureDir(repoRoot); err != nil {
-		return err
-	}
+	agentsPath := filepath.Join(repoRoot, "AGENTS.md")
 
-	agentsPath := filepath.Join(contextDir, "AGENTS.md")
+	existingContent, err := os.ReadFile(agentsPath)
+	hasExisting := err == nil
 
-	if !agentsForce {
-		if _, err := os.Stat(agentsPath); err == nil {
-			return fmt.Errorf("AGENTS.md 已存在，使用 --force 强制覆盖")
+	if hasExisting && !agentsForce {
+		// 检查是否已存在 Coco-Ext section
+		if strings.Contains(string(existingContent), cocoExtSectionMarker) {
+			color.Yellow("AGENTS.md 已存在，且包含 Coco-Ext 行为约束")
+			color.Yellow("使用 --force 强制重新生成（或手动编辑 AGENTS.md）")
+			return nil
 		}
 	}
 
-	content := `# AGENTS.md
+	// 生成新内容
+	newSection := fmt.Sprintf(`%s
 
-本文件定义了 AI 编码时的行为约束准则，所有 AI 协作必须遵守。
-
-## 核心原则
+本部分由 coco-ext agents 生成，定义 Coco-Ext 场景下的行为约束。
 
 ### 1. 用户已修改的代码：不要覆盖
 
@@ -89,23 +89,37 @@ func runAgents(cmd *cobra.Command, args []string) error {
 
 **正确做法**：提出 2-3 个方案，说明利弊，让用户选择或确认。
 
-## 附加规则
+### 5. 附加规则
 
 - **修改前说明**：每次修改前简要说清楚改动范围
 - **危险操作确认**：删除文件、重写核心模块、大规模删除等操作必须明确确认
 - **用户拒绝后不再提**：如果用户明确拒绝某个建议，记录后不再重复提起
 - **不确定性声明**：当你不确定时，明确说"我不确定..."，而不是装作知道
 
----
+---`, cocoExtSectionMarker)
 
-*此文件由 coco-ext agents 生成，可按需修改。*
+	var finalContent string
+	if hasExisting && !agentsForce {
+		// 追加到现有文件
+		finalContent = strings.TrimSpace(string(existingContent)) + "\n\n" + newSection + "\n"
+	} else {
+		// 新建文件
+		header := `# AGENTS.md
+
+本文件定义了 AI 编码时的行为约束准则，所有 AI 协作必须遵守。
 `
+		finalContent = header + newSection + "\n"
+	}
 
-	if err := os.WriteFile(agentsPath, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(agentsPath, []byte(finalContent), 0600); err != nil {
 		return fmt.Errorf("写入 AGENTS.md 失败: %w", err)
 	}
 
-	color.Green("✓ AGENTS.md 已生成: %s", agentsPath)
+	if hasExisting && !agentsForce {
+		color.Green("✓ AGENTS.md 已更新，追加了 Coco-Ext 行为约束")
+	} else {
+		color.Green("✓ AGENTS.md 已生成: %s", agentsPath)
+	}
 	color.Yellow("提示：请 review 文件内容，按需调整约束条款")
 
 	return nil
