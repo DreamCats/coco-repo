@@ -25,7 +25,7 @@ var updateCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(updateCmd)
+	contextCmd.AddCommand(updateCmd)
 	updateCmd.Flags().StringVarP(&commitRange, "range", "r", "HEAD~1..HEAD", "commit 范围（默认最近一次提交）")
 }
 

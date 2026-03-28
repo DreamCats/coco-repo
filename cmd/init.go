@@ -24,7 +24,7 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(initCmd)
+	contextCmd.AddCommand(initCmd)
 	initCmd.Flags().BoolVarP(&forceInit, "force", "f", false, "强制覆盖已有的 .livecoding/context/ 目录")
 }
 

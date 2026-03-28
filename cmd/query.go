@@ -22,7 +22,7 @@ var queryCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(queryCmd)
+	contextCmd.AddCommand(queryCmd)
 	queryCmd.Flags().StringVar(&queryFile, "file", "", "指定查询的知识文件（如 glossary.md）")
 }
 
