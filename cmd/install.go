@@ -102,7 +102,7 @@ func syncSkills() error {
 		return fmt.Errorf("获取当前目录失败: %w", err)
 	}
 
-	repoSkillsDir := filepath.Join(repoRoot, ".trae", "skills")
+	repoSkillsDir := filepath.Join(repoRoot, "skills")
 	if _, err := os.Stat(repoSkillsDir); os.IsNotExist(err) {
 		color.Yellow("⚠ 仓库中没有 .trae/skills 目录，跳过 skills 同步")
 		return nil
