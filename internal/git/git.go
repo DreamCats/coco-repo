@@ -36,7 +36,8 @@ func (d *DiffInfo) WriteMeta(path string) error {
 }
 
 // GetDiffInfo 获取本地代码变更信息
-func GetDiffInfo(repoRoot, baseBranch string) (*DiffInfo, error) {
+// fullBranchDiff 为 true 时获取分支整体 diff，为 false 时只获取最后一个 commit 的 diff
+func GetDiffInfo(repoRoot, baseBranch string, fullBranchDiff bool) (*DiffInfo, error) {
 	// 获取当前分支
 	sourceBranch, err := getCurrentBranch(repoRoot)
 	if err != nil {
@@ -52,7 +53,7 @@ func GetDiffInfo(repoRoot, baseBranch string) (*DiffInfo, error) {
 	}
 
 	// 获取 diff
-	diff, err := getDiff(repoRoot, baseBranch, sourceBranch)
+	diff, err := getDiff(repoRoot, baseBranch, sourceBranch, fullBranchDiff)
 	if err != nil {
 		return nil, fmt.Errorf("获取 diff 失败: %w", err)
 	}
@@ -134,7 +135,8 @@ func detectDefaultBranch(repoRoot string) (string, error) {
 }
 
 // getDiff 获取两个分支间的 diff
-func getDiff(repoRoot, baseBranch, sourceBranch string) (string, error) {
+// fullBranchDiff 为 true 时获取分支整体 diff，为 false 时只获取最后一个 commit 的 diff
+func getDiff(repoRoot, baseBranch, sourceBranch string, fullBranchDiff bool) (string, error) {
 	// 确保 baseBranch 存在
 	cmd := exec.Command("git", "rev-parse", "--verify", baseBranch)
 	cmd.Dir = repoRoot
@@ -143,9 +145,18 @@ func getDiff(repoRoot, baseBranch, sourceBranch string) (string, error) {
 		baseBranch = "origin/" + baseBranch
 	}
 
-	cmd = exec.Command("git", "diff", baseBranch+"..."+sourceBranch)
+	var diffCmd *exec.Cmd
+	if fullBranchDiff {
+		// 获取分支整体 diff（从分叉点开始的所有 commits）
+		diffCmd = exec.Command("git", "diff", baseBranch+"..."+sourceBranch)
+	} else {
+		// 只获取最后一个 commit 的 diff
+		// 获取 sourceBranch 最新 commit 的 parent 与 最新 commit 之间的 diff
+		diffCmd = exec.Command("git", "diff", sourceBranch+"~1", sourceBranch)
+	}
+
 	cmd.Dir = repoRoot
-	output, err := cmd.Output()
+	output, err := diffCmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("git diff 失败: %w", err)
 	}

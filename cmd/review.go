@@ -17,6 +17,7 @@ import (
 var reviewBase string
 var reviewAsync bool
 var reviewOutputDir string
+var reviewFull bool
 
 var reviewCmd = &cobra.Command{
 	Use:   "review",
@@ -30,6 +31,7 @@ func init() {
 	reviewCmd.Flags().StringVarP(&reviewBase, "base", "", "", "对比的基准分支（如 main），默认自动检测")
 	reviewCmd.Flags().BoolVarP(&reviewAsync, "async", "", false, "异步模式，不等待结果立即返回")
 	reviewCmd.Flags().StringVarP(&reviewOutputDir, "output", "", "", "自定义输出目录")
+	reviewCmd.Flags().BoolVarP(&reviewFull, "full", "", false, "分析分支整体 diff（默认只分析最后一个 commit）")
 }
 
 func runReview(cmd *cobra.Command, args []string) error {
@@ -41,7 +43,7 @@ func runReview(cmd *cobra.Command, args []string) error {
 	// 获取 git diff 信息
 	color.Cyan("正在获取代码变更信息...")
 
-	diffInfo, err := git.GetDiffInfo(repoRoot, reviewBase)
+	diffInfo, err := git.GetDiffInfo(repoRoot, reviewBase, reviewFull)
 	if err != nil {
 		return fmt.Errorf("获取代码变更失败: %w", err)
 	}
