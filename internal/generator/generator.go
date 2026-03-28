@@ -98,3 +98,25 @@ func (g *Generator) Update(name, existingContent, diffContent string, onChunk fu
 
 	return content, nil
 }
+
+// Prompt 直接发送 prompt，返回完整响应
+func (g *Generator) Prompt(prompt string, onChunk func(string)) (string, error) {
+	var result strings.Builder
+	_, err := g.conn.Prompt(
+		prompt,
+		g.modelID,
+		"",
+		func(text string) {
+			result.WriteString(text)
+			if onChunk != nil {
+				onChunk(text)
+			}
+		},
+		func(kind, title, status string) {},
+	)
+	if err != nil {
+		return "", fmt.Errorf("prompt 失败: %w", err)
+	}
+
+	return result.String(), nil
+}

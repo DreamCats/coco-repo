@@ -11,6 +11,9 @@ const (
 
 	// ContextDir 知识库目录（在仓库根目录下）
 	ContextDir = ".livecoding/context"
+
+	// ReviewOutputDir Review 报告输出目录
+	ReviewOutputDir = ".livecoding/review"
 )
 
 // DefaultConfigDir 返回用户级配置目录
