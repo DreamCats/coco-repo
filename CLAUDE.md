@@ -41,7 +41,7 @@ cmd/                        # Cobra CLI 命令层
   review.go                 #   AI Code Review（基于 git diff）
   gcmsg.go                  #   Commit message 生成（支持 --amend）
   install.go                #   安装 git hooks + 同步 skills
-  daemon.go                 #   daemon 管理（隐藏命令）
+  daemon.go                 #   daemon 管理（start/status/stop）
   version.go                #   版本信息
 internal/
   config/defaults.go        # 硬编码配置（模型名、目录路径、知识文件定义）

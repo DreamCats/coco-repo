@@ -60,6 +60,12 @@ coco-ext gcmsg --amend      # 生成并覆盖上一个 commit
 cd /path/to/your/repo
 coco-ext install            # 安装 pre-push hook + pre-commit hook + 同步 skills
 
+# 8. Daemon 管理 — 手动管理 coco daemon
+coco-ext daemon status      # 查看 daemon 状态
+coco-ext daemon start       # 前台启动 daemon（阻塞）
+coco-ext daemon start -d    # 后台启动 daemon
+coco-ext daemon stop        # 停止 daemon
+
 ## Git Hooks
 
 ### pre-push hook
