@@ -12,7 +12,7 @@ import (
 
 var agentsForce bool
 
-const cocoExtSectionMarker = "## Coco-Ext 行为约束"
+const cocoExtSectionMarker = "## AI 编码协作准则"
 
 var agentsCmd = &cobra.Command{
 	Use:   "agents",
@@ -53,7 +53,7 @@ func runAgents(cmd *cobra.Command, args []string) error {
 	// 生成新内容
 	newSection := fmt.Sprintf(`%s
 
-本部分由 coco-ext agents 生成，定义 Coco-Ext 场景下的行为约束。
+本准则由 coco-ext agents 生成，适用于 AI 辅助编码时的行为规范。
 
 ### 1. 用户已修改的代码：不要覆盖
 
