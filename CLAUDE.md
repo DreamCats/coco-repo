@@ -37,6 +37,9 @@ cmd/                        # Cobra CLI 命令层
   update.go                 #   基于 git diff 增量更新
   query.go                  #   关键词搜索（设计为 MCP tool）
   status.go                 #   知识库状态查看
+  review.go                 #   AI Code Review（基于 git diff）
+  gcmsg.go                  #   Commit message 生成（支持 --amend）
+  install.go                #   安装 git hooks + 同步 skills
   daemon.go                 #   daemon 管理（隐藏命令）
   version.go                #   版本信息
 internal/
@@ -55,6 +58,16 @@ internal/
 **init 命令**：检查 git 仓库 → `scanner.Scan()` 扫描代码结构 → `generator.New()` 连接 daemon（自动启动）→ 按序生成 4 个知识文件（glossary → architecture → patterns → gotchas）→ 写入 `.livecoding/context/`
 
 **update 命令**：获取 git diff → 加载已有知识文件 → 判断哪些文件受影响 → 仅更新变更部分，返回 "NO_UPDATE" 表示无需更新
+
+**review 命令**：获取 git diff（最后一个 commit 或分支整体）→ 连接 coco daemon → 生成 review 报告 → 保存到 `.livecoding/review/`
+
+**gcmsg 命令**：获取当前 commit diff → 连接 coco daemon → 生成符合规范的 commit message → 支持 `--amend` 自动覆盖上一个 commit
+
+**install 命令**：安装 pre-push hook（烂 message 检测 + gcmsg --amend + 异步 review）和 pre-commit hook（goimports 格式化）。install 时检测 goimports 是否安装，未安装给出警告。
+
+**pre-push hook**：仅修改 go.mod/go.sum 时跳过；烂 message（< 10 字符）时阻塞 push，执行 `gcmsg --amend` 后继续；其他情况异步触发 review。
+
+**pre-commit hook**：检测暂存区中已修改的 .go 文件，运行 `goimports -w` 格式化后重新 add。
 
 **daemon 连接**：通过 `coco-acp-sdk` 的 `daemon.Dial()` 连接，配置目录 `~/.config/coco-ext/`，支持自动启动、流式 prompt、状态查询、关闭
 

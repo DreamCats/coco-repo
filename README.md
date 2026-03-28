@@ -47,13 +47,36 @@ coco-ext query --file glossary.md "PopCard"
 
 # 4. 状态 — 查看知识库覆盖率
 coco-ext status
-```
+
+# 5. Code Review — AI 审查代码变更
+coco-ext review              # 审查最后一个 commit
+coco-ext review --full      # 审查分支整体 diff
+
+# 6. Commit Message 生成 — 自动生成规范 commit message
+coco-ext gcmsg              # 生成 message
+coco-ext gcmsg --amend      # 生成并覆盖上一个 commit
+
+# 7. 安装钩子 — 一键安装 git hooks
+cd /path/to/your/repo
+coco-ext install            # 安装 pre-push hook + pre-commit hook + 同步 skills
+
+## Git Hooks
+
+### pre-push hook
+- 烂 commit message（< 10 字符）时阻塞 push，自动 `gcmsg --amend` 优化
+- 仅修改 go.mod/go.sum 时跳过所有检查
+- 异步触发 review，不阻塞 push
+
+### pre-commit hook
+- 自动格式化已修改的 .go 文件（goimports）
+- 保证 import 顺序一致
 
 ## 前置依赖
 
 - Go 1.24+
 - [coco](https://github.com/anthropics/coco) CLI（`coco acp serve` 可用）
 - [coco-acp-sdk](https://github.com/DreamCats/coco-acp-sdk)（自动通过 go module 引入）
+- goimports（用于 pre-commit hook格式化）
 
 > coco daemon 会在首次调用时自动拉起，无需手动启动。
 
