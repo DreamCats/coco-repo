@@ -61,13 +61,24 @@ func installGitHook(repoRoot string) error {
 	hookPath := filepath.Join(hooksDir, "pre-push")
 	hookContent := `#!/bin/bash
 # coco-ext pre-push hook
-# 自动检测是否仅修改 go.mod/go.sum，如果是则跳过 review
+# 1. 检测烂 commit message，阻塞 push 并自动优化
+# 2. 仅修改 go.mod/go.sum 时跳过 review
 
-# 获取被推送的分支最新 commit 的 diff
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$BRANCH" = "HEAD" ]; then
     # detached HEAD 状态，跳过
     exit 0
+fi
+
+# 获取最新 commit 的 message
+COMMIT_MSG=$(git log -1 --pretty=%B 2>/dev/null | head -n 1 | tr -d '[:space:]')
+if [ -z "$COMMIT_MSG" ] || [ ${#COMMIT_MSG} -lt 10 ]; then
+    echo "⚠ commit message 太简短，正在生成更好的 message..."
+    if coco-ext gcmsg --amend; then
+        echo "✓ commit message 已优化"
+    else
+        echo "✗ commit message 优化失败，将使用原 message 推送"
+    fi
 fi
 
 # 检查是否仅修改了 go.mod/go.sum
