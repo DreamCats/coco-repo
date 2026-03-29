@@ -3,7 +3,7 @@ module github.com/DreamCats/coco-ext
 go 1.24.11
 
 require (
-	github.com/DreamCats/coco-acp-sdk v0.2.0
+	github.com/DreamCats/coco-acp-sdk v0.3.0
 	github.com/fatih/color v1.18.0
 	github.com/spf13/cobra v1.10.2
 )

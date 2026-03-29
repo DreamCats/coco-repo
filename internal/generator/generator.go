@@ -10,11 +10,13 @@ import (
 
 // Generator 知识文件生成器
 type Generator struct {
-	conn    *daemon.Conn
-	modelID string
+	conn      *daemon.Conn
+	sessionID string
+	modelID   string
 }
 
 // New 创建生成器，连接 coco daemon
+// 每次调用都会创建新的 session，由上游 agent 决策是否复用
 func New(repoPath string) (*Generator, error) {
 	conn, err := daemon.Dial(repoPath, &daemon.DialOption{
 		ConfigDir: config.DefaultConfigDir(),
@@ -22,7 +24,22 @@ func New(repoPath string) (*Generator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("连接 coco daemon 失败: %w", err)
 	}
-	return &Generator{conn: conn, modelID: config.DefaultModel}, nil
+
+	// 创建新 session
+	sess, err := conn.NewSession(repoPath)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("创建 session 失败: %w", err)
+	}
+
+	// 设置当前使用的 session
+	conn.UseSession(sess.SessionID)
+
+	return &Generator{
+		conn:      conn,
+		sessionID: sess.SessionID,
+		modelID:   config.DefaultModel,
+	}, nil
 }
 
 // Info 获取 daemon 状态信息（PID、SessionID、ModelID、Uptime）
@@ -31,7 +48,7 @@ func (g *Generator) Info() (pid int, sessionID, modelID, uptime string, err erro
 	if err != nil {
 		return 0, "", "", "", err
 	}
-	return resp.PID, resp.SessionID, resp.ModelID, resp.Uptime, nil
+	return resp.PID, g.sessionID, g.modelID, resp.Uptime, nil
 }
 
 // Close 关闭连接
