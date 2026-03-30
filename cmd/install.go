@@ -17,7 +17,7 @@ var installSkills bool
 var installCmd = &cobra.Command{
 	Use:   "install",
 	Short: "安装 git hooks 和同步 skills",
-	Long:  "安装 git pre-push/pre-commit/commit-msg hook 和同步 skills 到用户目录",
+	Long:  "安装 git pre-commit/commit-msg hook 和同步 skills 到用户目录",
 	RunE:  runInstall,
 }
 
@@ -34,7 +34,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	if installHooks {
-		if err := installGitHook(repoRoot); err != nil {
+		if err := removeLegacyPrePushHook(repoRoot); err != nil {
 			return err
 		}
 		if err := installPreCommitHook(repoRoot); err != nil {
@@ -55,66 +55,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	color.Green("✓ 安装完成")
-	return nil
-}
-
-// installGitHook 安装 pre-push hook
-func installGitHook(repoRoot string) error {
-	color.Cyan("正在安装 git pre-push hook...")
-
-	hooksDir := filepath.Join(repoRoot, ".git", "hooks")
-	if err := os.MkdirAll(hooksDir, 0755); err != nil {
-		return fmt.Errorf("创建 hooks 目录失败: %w", err)
-	}
-
-	hookPath := filepath.Join(hooksDir, "pre-push")
-	hookContent := `#!/bin/bash
-# coco-ext pre-push hook
-# 1. 仅修改 go.mod/go.sum 时跳过所有检查
-# 2. 其他情况在 push 结束后后台触发 review
-
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [ "$BRANCH" = "HEAD" ]; then
-    # detached HEAD 状态，跳过
-    exit 0
-fi
-
-# 检查是否仅修改了 go.mod/go.sum（这些不需要检查 message 和 review）
-CHANGES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -v '^$' | grep -v -E '^(go\.mod|go\.sum|go\.mod\.lock)$' | wc -l)
-if [ "$CHANGES" = "0" ]; then
-    echo "仅修改 go.mod/go.sum，跳过检查"
-    exit 0
-fi
-
-# 排队执行 review（等待当前 push 结束后再后台启动）
-COMMIT_ID=$(git rev-parse --short HEAD 2>/dev/null)
-REVIEW_LAUNCHED_AT=$(date '+%Y-%m-%d %H:%M:%S')
-GIT_PUSH_PID="$PPID"
-GIT_PUSH_STARTED_AT=$(ps -p "$GIT_PUSH_PID" -o lstart= 2>/dev/null | sed 's/^ *//')
-LOG_FILE=".livecoding/logs/review-${COMMIT_ID}-${BRANCH}-$(date +%Y%m%d%H%M%S).log"
-mkdir -p .livecoding/logs
-( while true; do
-    CURRENT_START=$(ps -p "$GIT_PUSH_PID" -o lstart= 2>/dev/null | sed 's/^ *//')
-    if [ -z "$CURRENT_START" ] || [ "$CURRENT_START" != "$GIT_PUSH_STARTED_AT" ]; then
-        break
-    fi
-    sleep 1
-done
-nohup coco-ext review --async --low-priority > "$LOG_FILE" 2>&1 < /dev/null &
-) </dev/null >/dev/null 2>&1 &
-echo "Review 已排队: $REVIEW_LAUNCHED_AT"
-echo "Review 将在 push 结束后后台启动"
-echo "Review 日志: $LOG_FILE"
-echo "请在 .livecoding/review/ 目录查看报告"
-
-exit 0
-`
-
-	if err := os.WriteFile(hookPath, []byte(hookContent), 0755); err != nil {
-		return fmt.Errorf("写入 hook 失败: %w", err)
-	}
-
-	color.Green("✓ pre-push hook 已安装")
 	return nil
 }
 
@@ -382,7 +322,7 @@ var uninstallSkills bool
 var uninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "卸载 git hooks 和 skills",
-	Long:  "卸载 git pre-push/pre-commit/commit-msg hook 和 skills（仅删除从 coco-ext 安装的部分）",
+	Long:  "卸载 git pre-commit/commit-msg hook 和 skills（仅删除从 coco-ext 安装的部分）",
 	RunE:  runUninstall,
 }
 
@@ -491,6 +431,18 @@ func removeLegacyPostCommitHook(repoRoot string) error {
 			return fmt.Errorf("删除 legacy post-commit hook 失败: %w", err)
 		}
 		color.Green("✓ legacy post-commit hook 已移除")
+	}
+	return nil
+}
+
+func removeLegacyPrePushHook(repoRoot string) error {
+	hooksDir := filepath.Join(repoRoot, ".git", "hooks")
+	hookPath := filepath.Join(hooksDir, "pre-push")
+	if _, err := os.Stat(hookPath); err == nil {
+		if err := os.Remove(hookPath); err != nil {
+			return fmt.Errorf("删除 legacy pre-push hook 失败: %w", err)
+		}
+		color.Green("✓ legacy pre-push hook 已移除")
 	}
 	return nil
 }

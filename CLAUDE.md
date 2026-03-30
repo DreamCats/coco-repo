@@ -64,15 +64,15 @@ internal/
 
 **gcmsg 命令**：基于当前 commit diff 或暂存区 diff 生成规范 commit message；支持 `--amend` 覆盖上一个 commit，也支持 `--commit-msg-file` 直接写入 Git 的 commit message 文件。AI 失败时会退回本地兜底 message。
 
-**install 命令**：安装 commit-msg hook（短 message 自动优化）、pre-push hook（异步 review）和 pre-commit hook（goimports 格式化）。install 时检测 goimports 是否安装，未安装给出警告，并清理旧的 legacy post-commit hook。
+**install 命令**：安装 commit-msg hook（短 message 自动优化）和 pre-commit hook（goimports 格式化），并同步 repo 内置 skills。install 时检测 goimports 是否安装，未安装给出警告，并清理旧的 legacy post-commit / pre-push hook。
 
 **uninstall 命令**：卸载 git hooks 和 skills（仅删除从 coco-ext 安装的部分，不影响其他来源的 skills）。
 
 **commit-msg hook**：检测 `COMMIT_EDITMSG` 第一行是否过短；若过短，则调用 `coco-ext gcmsg --staged --commit-msg-file` 基于暂存区 diff 生成 message 并直接写回文件。优化失败时保留原始 message，不阻塞 commit。
 
-**pre-push hook**：仅修改 go.mod/go.sum 时跳过；其他情况异步触发 review，并打印触发时间和日志路径，方便观察后台任务是否与 push 并行。
-
 **pre-commit hook**：检测暂存区中已修改的 .go 文件，运行 `goimports -w` 格式化后重新 add。
+
+**push 命令**：`coco-ext push` 先执行 `git push`；当 push 成功后，再后台触发 `coco-ext review --async`。这个命令替代了此前不稳定的 `pre-push review` 方案。
 
 **daemon 连接**：通过 `coco-acp-sdk` 的 `daemon.Dial()` 连接，配置目录 `~/.config/coco-ext/`，支持自动启动、流式 prompt、状态查询、关闭。`Prompt` / `Generate` / `Update` 统一带 30 秒超时保护，超时后主动关闭当前连接。
 
@@ -87,3 +87,4 @@ internal/
 - prompt 和用户界面均为中文
 - 版本信息通过 Makefile ldflags 注入到 main 包变量
 - `review --async` 会真正拉起后台子进程，主进程立即返回日志路径和报告目录
+- `review` 使用 3 分钟专用超时；`gcmsg` / `context` 仍使用 30 秒默认超时

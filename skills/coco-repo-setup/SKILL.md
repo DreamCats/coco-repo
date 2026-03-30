@@ -19,8 +19,8 @@ description: 当需要为仓库安装、更新或卸载 coco-ext 协作环境时
 1. 在目标仓库根目录执行 `coco-ext install`。
 2. 安装后确认以下三类行为是否存在：
    - `commit-msg`：短 message 自动优化
-   - `pre-push`：异步触发 review
    - `pre-commit`：对暂存的 Go 文件执行 `goimports`
+   - `coco-ext push`：push 成功后后台触发 review
 3. 如果仓库根目录存在 `skills/`，安装时会同步到 `~/.trae/skills/`。
 4. 需要移除时执行 `coco-ext uninstall`。
 
@@ -35,7 +35,6 @@ coco-ext daemon status
 ## 安装后应具备的行为
 
 - `.git/hooks/commit-msg`
-- `.git/hooks/pre-push`
 - `.git/hooks/pre-commit`
 - `~/.trae/skills/` 下同步的 repo 内置 skills
 
@@ -48,6 +47,5 @@ coco-ext daemon status
 
 ## 例外说明
 
-- 只有 `go.mod`、`go.sum`、`go.mod.lock` 变更时，`pre-push` 会跳过 review
 - `commit-msg` 优化失败时会保留原始 message，不阻塞 commit
 - `pre-commit` 依赖 `goimports`，未安装时只告警，不中断提交

@@ -184,14 +184,15 @@ conn, err := daemon.Dial(repoPath, config.DefaultDialOption())
 - 目标：格式化暂存区中的 `.go` 文件
 - 行为：执行 `goimports -w` 并重新 `git add`
 
-### 9.3 pre-push
+### 9.3 push 包装命令
 
-- 触发时机：`git push` 前
-- 目标：异步触发本地 Code Review，不阻塞 push
+- 触发时机：用户显式执行 `coco-ext push`
+- 目标：在 `git push` 成功后后台触发本地 Code Review
 - 行为：
-  1. 若仅修改 `go.mod` / `go.sum` / `go.mod.lock`，直接跳过
-  2. 否则后台执行 `coco-ext review --async`
-  3. 打印 review 触发时间、日志路径和报告目录，便于排查
+  1. 执行 `git push [args...]`
+  2. 若 push 失败，直接返回失败，不触发 review
+  3. 若 push 成功，后台执行 `coco-ext review --async`
+  4. 输出 review 日志路径和报告目录，便于排查
 
 ## 10. gcmsg 设计补充
 
@@ -211,5 +212,6 @@ conn, err := daemon.Dial(repoPath, config.DefaultDialOption())
 ## 11. 超时与会话策略
 
 - 每次 `generator.New()` 都会新建一个 coco ACP session，不复用历史 session
-- `Prompt`、`Generate`、`Update` 三条 AI 调用链统一使用 30 秒超时
+- `Prompt`、`Generate`、`Update` 默认使用 30 秒超时
+- review 生成报告使用 3 分钟专用超时
 - 超时后主动关闭当前 daemon 连接，避免 `gcmsg`、`review` 或知识库生成长时间卡住
