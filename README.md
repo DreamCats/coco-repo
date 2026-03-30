@@ -109,7 +109,7 @@ coco-ext daemon stop        # 停止 daemon
 
 ## 内置 Skills
 
-仓库根目录提供 `skills/`，`coco-ext install` 时会同步到 `~/.trae/skills/`。当前内置 5 个 skill：
+`coco-ext` 二进制内置了 skills 资源，执行 `coco-ext install` 时会直接同步到 `~/.trae/skills/`。当前内置 5 个 skill：
 
 - `coco-repo-context`：初始化、更新、查询 `.livecoding/context/`
 - `coco-repo-setup`：安装/卸载 hooks 与同步 repo 内置 skills

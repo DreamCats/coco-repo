@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -201,18 +204,6 @@ func isCommandAvailable(name string) bool {
 func syncSkills() error {
 	color.Cyan("正在同步 skills...")
 
-	// 检查仓库是否有 .trae/skills 目录
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("获取当前目录失败: %w", err)
-	}
-
-	repoSkillsDir := filepath.Join(repoRoot, "skills")
-	if _, err := os.Stat(repoSkillsDir); os.IsNotExist(err) {
-		color.Yellow("⚠ 仓库中没有 skills/ 目录，跳过 skills 同步")
-		return nil
-	}
-
 	// 获取用户目录
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -224,36 +215,98 @@ func syncSkills() error {
 		return fmt.Errorf("创建用户 skills 目录失败: %w", err)
 	}
 
-	// 读取仓库 skills 目录内容
-	entries, err := os.ReadDir(repoSkillsDir)
+	entries, err := fs.ReadDir(embeddedSkillsFS, embeddedSkillsRoot)
 	if err != nil {
-		return fmt.Errorf("读取仓库 skills 目录失败: %w", err)
+		return fmt.Errorf("读取内置 skills 失败: %w", err)
 	}
 
+	installedSkills := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() {
-			// 递归复制目录
-			src := filepath.Join(repoSkillsDir, entry.Name())
-			dst := filepath.Join(userSkillsDir, entry.Name())
-			if err := copyDir(src, dst); err != nil {
-				color.Yellow("⚠ 复制 %s 失败: %v", entry.Name(), err)
-			} else {
-				color.Green("✓ 同步 skill: %s", entry.Name())
-			}
-		} else {
-			// 复制文件
-			src := filepath.Join(repoSkillsDir, entry.Name())
-			dst := filepath.Join(userSkillsDir, entry.Name())
-			if err := copyFile(src, dst); err != nil {
-				color.Yellow("⚠ 复制 %s 失败: %v", entry.Name(), err)
-			} else {
-				color.Green("✓ 同步 skill: %s", entry.Name())
-			}
+		if !entry.IsDir() {
+			continue
 		}
+
+		skillName := entry.Name()
+		srcRoot := filepath.ToSlash(filepath.Join(embeddedSkillsRoot, skillName))
+		dstRoot := filepath.Join(userSkillsDir, skillName)
+		if err := copyEmbeddedDir(srcRoot, dstRoot); err != nil {
+			color.Yellow("⚠ 复制 %s 失败: %v", skillName, err)
+			continue
+		}
+		installedSkills = append(installedSkills, skillName)
+		color.Green("✓ 同步 skill: %s", skillName)
+	}
+
+	if err := writeSkillsManifest(userSkillsDir, installedSkills); err != nil {
+		return fmt.Errorf("写入 skills manifest 失败: %w", err)
 	}
 
 	color.Green("✓ skills 同步完成")
 	return nil
+}
+
+func copyEmbeddedDir(srcRoot, dstRoot string) error {
+	return fs.WalkDir(embeddedSkillsFS, srcRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(srcRoot, path)
+		if err != nil {
+			return err
+		}
+
+		if relPath == "." {
+			return os.MkdirAll(dstRoot, 0755)
+		}
+
+		dstPath := filepath.Join(dstRoot, filepath.FromSlash(relPath))
+		if d.IsDir() {
+			return os.MkdirAll(dstPath, 0755)
+		}
+
+		data, err := embeddedSkillsFS.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(dstPath, data, 0644)
+	})
+}
+
+type skillsManifest struct {
+	InstalledBy string    `json:"installed_by"`
+	Version     string    `json:"version"`
+	InstalledAt time.Time `json:"installed_at"`
+	Skills      []string  `json:"skills"`
+}
+
+func writeSkillsManifest(userSkillsDir string, skills []string) error {
+	manifest := skillsManifest{
+		InstalledBy: "coco-ext",
+		Version:     version,
+		InstalledAt: time.Now(),
+		Skills:      skills,
+	}
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
+	manifestPath := filepath.Join(userSkillsDir, skillsManifestFileName)
+	return os.WriteFile(manifestPath, data, 0644)
+}
+
+func readSkillsManifest(userSkillsDir string) (*skillsManifest, error) {
+	manifestPath := filepath.Join(userSkillsDir, skillsManifestFileName)
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var manifest skillsManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return nil, err
+	}
+	return &manifest, nil
 }
 
 // copyFile 复制单个文件
@@ -450,18 +503,6 @@ func removeLegacyPrePushHook(repoRoot string) error {
 func removeSkills() error {
 	color.Cyan("正在卸载 skills...")
 
-	repoRoot, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("获取当前目录失败: %w", err)
-	}
-
-	repoSkillsDir := filepath.Join(repoRoot, "skills")
-	_, err = os.Stat(repoSkillsDir)
-	if os.IsNotExist(err) {
-		color.Yellow("⚠ 仓库中没有 skills/ 目录，无需卸载")
-		return nil
-	}
-
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("获取用户目录失败: %w", err)
@@ -473,24 +514,33 @@ func removeSkills() error {
 		return nil
 	}
 
-	entries, err := os.ReadDir(repoSkillsDir)
+	manifest, err := readSkillsManifest(userSkillsDir)
 	if err != nil {
-		return fmt.Errorf("读取仓库 skills 目录失败: %w", err)
+		if os.IsNotExist(err) {
+			color.Yellow("⚠ 未找到 skills manifest，跳过")
+			return nil
+		}
+		return fmt.Errorf("读取 skills manifest 失败: %w", err)
 	}
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			targetPath := filepath.Join(userSkillsDir, entry.Name())
-			if _, err := os.Stat(targetPath); err == nil {
-				if err := os.RemoveAll(targetPath); err != nil {
-					color.Yellow("⚠ 删除 %s 失败: %v", entry.Name(), err)
-				} else {
-					color.Green("✓ 删除 skill: %s", entry.Name())
-				}
+	for _, skillName := range manifest.Skills {
+		targetPath := filepath.Join(userSkillsDir, skillName)
+		if _, err := os.Stat(targetPath); err == nil {
+			if err := os.RemoveAll(targetPath); err != nil {
+				color.Yellow("⚠ 删除 %s 失败: %v", skillName, err)
 			} else {
-				color.Yellow("⚠ %s 不存在，跳过", entry.Name())
+				color.Green("✓ 删除 skill: %s", skillName)
 			}
+		} else {
+			color.Yellow("⚠ %s 不存在，跳过", skillName)
 		}
+	}
+
+	manifestPath := filepath.Join(userSkillsDir, skillsManifestFileName)
+	if err := os.Remove(manifestPath); err == nil {
+		color.Green("✓ 删除 skills manifest")
+	} else if !os.IsNotExist(err) {
+		color.Yellow("⚠ 删除 skills manifest 失败: %v", err)
 	}
 
 	color.Green("✓ skills 卸载完成")
