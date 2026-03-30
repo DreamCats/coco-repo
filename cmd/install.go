@@ -87,7 +87,7 @@ fi
 COMMIT_ID=$(git rev-parse --short HEAD 2>/dev/null)
 LOG_FILE=".livecoding/logs/review-${COMMIT_ID}-${BRANCH}-$(date +%Y%m%d%H%M%S).log"
 mkdir -p .livecoding/logs
-(coco-ext review --async > "$LOG_FILE" 2>&1) &
+nohup coco-ext review --async > "$LOG_FILE" 2>&1 < /dev/null &
 echo "Review 已触发，请在 .livecoding/review/ 目录查看报告"
 
 exit 0

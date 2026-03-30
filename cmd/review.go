@@ -3,7 +3,10 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -70,6 +73,10 @@ func runReview(cmd *cobra.Command, args []string) error {
 		outputDir = filepath.Join(repoRoot, config.ReviewOutputDir, dirName)
 	}
 
+	if reviewAsync {
+		return startReviewAsync(repoRoot, outputDir)
+	}
+
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return fmt.Errorf("创建输出目录失败: %w", err)
 	}
@@ -112,6 +119,53 @@ func runReview(cmd *cobra.Command, args []string) error {
 
 	color.Green("\n✓ Review 完成!")
 	color.Green("报告已生成: %s", reportPath)
+
+	return nil
+}
+
+func startReviewAsync(repoRoot, outputDir string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("获取可执行文件路径失败: %w", err)
+	}
+
+	logDir := filepath.Join(repoRoot, ".livecoding", "logs")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("创建日志目录失败: %w", err)
+	}
+
+	logFileName := fmt.Sprintf("review-%s.log", time.Now().Format("20060102150405"))
+	logPath := filepath.Join(logDir, logFileName)
+
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		return fmt.Errorf("创建日志文件失败: %w", err)
+	}
+	defer logFile.Close()
+
+	reviewArgs := []string{"review"}
+	if reviewBase != "" {
+		reviewArgs = append(reviewArgs, "--base", reviewBase)
+	}
+	if reviewFull {
+		reviewArgs = append(reviewArgs, "--full")
+	}
+	reviewArgs = append(reviewArgs, "--output", outputDir)
+
+	reviewCmd := exec.Command(exe, reviewArgs...)
+	reviewCmd.Dir = repoRoot
+	reviewCmd.Stdin = nil
+	reviewCmd.Stdout = logFile
+	reviewCmd.Stderr = logFile
+	reviewCmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+
+	if err := reviewCmd.Start(); err != nil {
+		return fmt.Errorf("启动异步 review 失败: %w", err)
+	}
+
+	color.Green("Review 已在后台启动")
+	color.Green("日志: %s", logPath)
+	color.Green("报告目录: %s", outputDir)
 
 	return nil
 }
