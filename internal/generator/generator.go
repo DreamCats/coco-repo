@@ -3,6 +3,7 @@ package generator
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/DreamCats/coco-acp-sdk/daemon"
 	"github.com/DreamCats/coco-ext/internal/config"
@@ -118,22 +119,50 @@ func (g *Generator) Update(name, existingContent, diffContent string, onChunk fu
 
 // Prompt 直接发送 prompt，返回完整响应
 func (g *Generator) Prompt(prompt string, onChunk func(string)) (string, error) {
-	var result strings.Builder
-	_, err := g.conn.Prompt(
-		prompt,
-		g.modelID,
-		"",
-		func(text string) {
-			result.WriteString(text)
-			if onChunk != nil {
-				onChunk(text)
-			}
-		},
-		func(kind, title, status string) {},
-	)
-	if err != nil {
-		return "", fmt.Errorf("prompt 失败: %w", err)
+	const promptTimeout = 30 * time.Second
+
+	type promptResult struct {
+		content string
+		err     error
 	}
 
-	return result.String(), nil
+	var result strings.Builder
+
+	done := make(chan promptResult, 1)
+	go func() {
+		_, err := g.conn.Prompt(
+			prompt,
+			g.modelID,
+			"",
+			func(text string) {
+				result.WriteString(text)
+				if onChunk != nil {
+					onChunk(text)
+				}
+			},
+			func(kind, title, status string) {},
+		)
+		if err != nil {
+			done <- promptResult{err: fmt.Errorf("prompt 失败: %w", err)}
+			return
+		}
+		done <- promptResult{content: result.String()}
+	}()
+
+	timer := time.NewTimer(promptTimeout)
+	defer timer.Stop()
+
+	select {
+	case promptResp := <-done:
+		if promptResp.err != nil {
+			return "", promptResp.err
+		}
+		return promptResp.content, nil
+	case <-timer.C:
+		if g.conn != nil {
+			_ = g.conn.Close()
+			g.conn = nil
+		}
+		return "", fmt.Errorf("prompt 超时（%s）", promptTimeout)
+	}
 }
