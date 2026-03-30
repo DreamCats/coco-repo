@@ -127,7 +127,7 @@ func runReview(cmd *cobra.Command, args []string) error {
 
 	// 生成 review 报告
 	reportPath := filepath.Join(outputDir, "report.md")
-	reportContent, err := review.GenerateReport(gen, diffInfo, func(chunk string) {
+	reportContent, err := review.GenerateReport(gen, repoRoot, diffInfo, func(chunk string) {
 		fmt.Print(chunk)
 	})
 	if err != nil {
