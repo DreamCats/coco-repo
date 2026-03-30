@@ -65,7 +65,7 @@ func installGitHook(repoRoot string) error {
 	hookContent := `#!/bin/bash
 # coco-ext pre-push hook
 # 1. 仅修改 go.mod/go.sum 时跳过所有检查
-# 2. 烂 commit message 时同步优化 message（阻塞），优化后继续 push
+# 2. 烂 commit message 时同步优化 message（阻塞），优化后中止本次 push，避免 hook 内二次 push
 # 3. 其他情况异步触发 review
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -104,8 +104,8 @@ if [ -z "$COMMIT_MSG" ] || [ ${#COMMIT_MSG} -lt 10 ]; then
             git commit --amend -m "$OPTIMIZED_MSG" --no-edit 2>/dev/null
             echo "✓ commit message 已优化"
             echo ""
-            # 继续执行 push
-            exit 0
+            echo "本次 push 已中止，请重新执行 git push"
+            exit 1
         fi
     fi
 
@@ -117,14 +117,14 @@ if [ -z "$COMMIT_MSG" ] || [ ${#COMMIT_MSG} -lt 10 ]; then
     LOG_FILE=".livecoding/logs/gcmsg-${ORIGINAL_COMMIT_ID}-$(date +%Y%m%d%H%M%S).log"
 
     # 同步执行（阻塞）
-    coco-ext gcmsg --amend --changelog --push --commit-id="$ORIGINAL_COMMIT_ID" 2>&1 | tee "$LOG_FILE"
+    coco-ext gcmsg --amend --changelog --commit-id="$ORIGINAL_COMMIT_ID" 2>&1 | tee "$LOG_FILE"
     EXIT_CODE=${PIPESTATUS[0]}
 
     if [ $EXIT_CODE -eq 0 ]; then
-        echo "   [3/3] commit message 已更新并推送 ✓"
+        echo "   [3/3] commit message 已更新 ✓"
         echo ""
-        echo "✓ 优化完成，push 已发送"
-        exit 0
+        echo "本次 push 已中止，请重新执行 git push"
+        exit 1
     else
         echo ""
         echo "✗ 优化失败，请检查日志: $LOG_FILE"
