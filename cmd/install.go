@@ -88,7 +88,10 @@ COMMIT_MSG=$(git log -1 --pretty=%B 2>/dev/null | head -n 1 | tr -d '[:space:]')
 # 烂 message 时：异步优化，不阻塞 push
 if [ -z "$COMMIT_MSG" ] || [ ${#COMMIT_MSG} -lt 10 ]; then
     echo "⚠ commit message 太简短，将在后台优化..."
-    echo "✓ push 已完成，请在后台任务完成后检查 changelog"
+    echo "✓ push 已完成，请在 .livecoding/logs/ 查看详细日志"
+
+    # 创建 logs 目录
+    mkdir -p .livecoding/logs
 
     # 检查 changelog 是否有记录（用原始 commit ID 查找）
     CHANGELOG_PATH=".livecoding/changelog/$BRANCH/${ORIGINAL_COMMIT_ID}.md"
@@ -105,7 +108,9 @@ if [ -z "$COMMIT_MSG" ] || [ ${#COMMIT_MSG} -lt 10 ]; then
     fi
 
     # 没有记录或 push 失败过，后台执行 gcmsg --amend --changelog --push --commit-id
-    (coco-ext gcmsg --amend --changelog --push --commit-id="$ORIGINAL_COMMIT_ID") 2>&1 &
+    # 输出重定向到 log 文件
+    LOG_FILE=".livecoding/logs/gcmsg-${ORIGINAL_COMMIT_ID}-$(date +%Y%m%d%H%M%S).log"
+    (coco-ext gcmsg --amend --changelog --push --commit-id="$ORIGINAL_COMMIT_ID" > "$LOG_FILE" 2>&1) &
     exit 0
 fi
 
