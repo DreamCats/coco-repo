@@ -65,7 +65,7 @@ func installGitHook(repoRoot string) error {
 	hookContent := `#!/bin/bash
 # coco-ext pre-push hook
 # 1. 仅修改 go.mod/go.sum 时跳过所有检查
-# 2. 烂 commit message 时异步优化（不阻塞 push），成功后自动 push
+# 2. 烂 commit message 时同步优化 message（阻塞），优化后继续 push
 # 3. 其他情况异步触发 review
 
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -85,13 +85,12 @@ fi
 ORIGINAL_COMMIT_ID=$(git rev-parse --short HEAD 2>/dev/null)
 COMMIT_MSG=$(git log -1 --pretty=%B 2>/dev/null | head -n 1 | tr -d '[:space:]')
 
-# 烂 message 时：异步优化，不阻塞 push
+# 烂 message 时：同步阻塞优化
 if [ -z "$COMMIT_MSG" ] || [ ${#COMMIT_MSG} -lt 10 ]; then
-    echo "⚠ commit message 太简短，将在后台优化..."
-    echo "✓ push 已完成，请在 .livecoding/logs/ 查看详细日志"
-
-    # 创建 logs 目录
-    mkdir -p .livecoding/logs
+    echo "⚠ commit message 太简短，正在优化..."
+    echo ""
+    echo "📝 优化进度:"
+    echo "   [1/3] 生成规范 commit message..."
 
     # 检查 changelog 是否有记录（用原始 commit ID 查找）
     CHANGELOG_PATH=".livecoding/changelog/$BRANCH/${ORIGINAL_COMMIT_ID}.md"
@@ -100,26 +99,45 @@ if [ -z "$COMMIT_MSG" ] || [ ${#COMMIT_MSG} -lt 10 ]; then
         OPTIMIZED_MSG=$(grep -A1 "^## optimized" "$CHANGELOG_PATH" 2>/dev/null | tail -n1)
         PUSH_RESULT=$(grep "^## push_result" "$CHANGELOG_PATH" 2>/dev/null | tail -n1)
         if [ -n "$OPTIMIZED_MSG" ] && [ "$PUSH_RESULT" != "## push_result error:" ]; then
-            echo "使用已记录的优化 message: $OPTIMIZED_MSG"
+            echo "   [2/3] 复用已记录的优化 message ✓"
+            echo "   [3/3] 更新 commit message..."
             git commit --amend -m "$OPTIMIZED_MSG" --no-edit 2>/dev/null
-            git push 2>/dev/null &
+            echo "✓ commit message 已优化"
+            echo ""
+            # 继续执行 push
             exit 0
         fi
     fi
 
-    # 没有记录或 push 失败过，后台执行 gcmsg --amend --changelog --push --commit-id
-    # 输出重定向到 log 文件
+    # 没有记录或 push 失败过，同步执行 gcmsg
+    echo "   [2/3] 调用 AI 生成 message..."
+
+    # 创建 logs 目录
+    mkdir -p .livecoding/logs
     LOG_FILE=".livecoding/logs/gcmsg-${ORIGINAL_COMMIT_ID}-$(date +%Y%m%d%H%M%S).log"
-    (coco-ext gcmsg --amend --changelog --push --commit-id="$ORIGINAL_COMMIT_ID" > "$LOG_FILE" 2>&1) &
-    exit 0
+
+    # 同步执行（阻塞）
+    coco-ext gcmsg --amend --changelog --push --commit-id="$ORIGINAL_COMMIT_ID" 2>&1 | tee "$LOG_FILE"
+    EXIT_CODE=${PIPESTATUS[0]}
+
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "   [3/3] commit message 已更新并推送 ✓"
+        echo ""
+        echo "✓ 优化完成，push 已发送"
+        exit 0
+    else
+        echo ""
+        echo "✗ 优化失败，请检查日志: $LOG_FILE"
+        exit 1
+    fi
 fi
 
 # 执行 review（异步模式，不阻塞 push）
-# 输出重定向到 log 文件
-LOG_FILE=".livecoding/logs/review-${COMMIT_ID:-$(git rev-parse --short HEAD 2>/dev/null)}-${BRANCH}-$(date +%Y%m%d%H%M%S).log"
+COMMIT_ID=$(git rev-parse --short HEAD 2>/dev/null)
+LOG_FILE=".livecoding/logs/review-${COMMIT_ID}-${BRANCH}-$(date +%Y%m%d%H%M%S).log"
 mkdir -p .livecoding/logs
 (coco-ext review --async > "$LOG_FILE" 2>&1) &
-echo "Review 已触发，请在 .livecoding/review/ 和 .livecoding/logs/ 目录查看报告"
+echo "Review 已触发，请在 .livecoding/review/ 目录查看报告"
 
 exit 0
 `
