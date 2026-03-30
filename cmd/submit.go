@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -26,6 +27,7 @@ func init() {
 }
 
 func runSubmit(cmd *cobra.Command, args []string) error {
+	startedAt := time.Now()
 	repoRoot, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("获取当前目录失败: %w", err)
@@ -42,11 +44,17 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("未检测到 staged 变更，请先执行 git add")
 	}
 
-	message, source, err := resolveSubmitMessage(repoRoot, args)
+	color.Cyan("📝 提交流程:")
+	color.Cyan("   [1/3] 生成 commit message...")
+
+	message, source, messageElapsed, err := resolveSubmitMessage(repoRoot, args)
 	if err != nil {
 		return err
 	}
+	color.Green("   [1/3] commit message 已生成 ✓")
+	color.Cyan("⏱ commit message 生成耗时: %s", formatDurationSeconds(messageElapsed))
 
+	color.Cyan("   [2/3] 执行 commit...")
 	color.Cyan("正在执行 commit...")
 	if err := commitWithMessage(repoRoot, message); err != nil {
 		return fmt.Errorf("git commit 失败: %w", err)
@@ -60,10 +68,12 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 	color.Green("✓ commit 成功: %s", commitID)
 	color.Green("✓ commit message 来源: %s", source)
 
+	color.Cyan("   [3/3] 执行 push 并在成功后后台触发 review...")
 	if err := triggerPushFlow(repoRoot, nil); err != nil {
 		return err
 	}
 
+	color.Green("⏱ 本次 submit 总耗时: %s", formatDurationSeconds(time.Since(startedAt)))
 	return nil
 }
 
@@ -90,34 +100,37 @@ func asExitError(err error, target **exec.ExitError) bool {
 	return true
 }
 
-func resolveSubmitMessage(repoRoot string, args []string) (string, string, error) {
+func resolveSubmitMessage(repoRoot string, args []string) (string, string, time.Duration, error) {
+	startedAt := time.Now()
+
 	if len(args) > 0 {
 		userMsg := strings.TrimSpace(args[0])
 		if isHighQualityCommitMessage(userMsg) {
 			color.Cyan("检测到用户提供了可直接使用的 commit message")
-			return userMsg, "user", nil
+			return userMsg, "user", time.Since(startedAt), nil
 		}
 		color.Yellow("⚠ 用户提供的 commit message 过短或不规范，自动改用 AI / 本地兜底生成")
 	}
 
-	color.Cyan("正在获取代码变更...")
+	color.Cyan("      - 正在获取 staged 代码变更...")
 	diff, err := getStagedDiff(repoRoot)
 	if err != nil {
-		return "", "", fmt.Errorf("获取 staged diff 失败: %w", err)
+		return "", "", 0, fmt.Errorf("获取 staged diff 失败: %w", err)
 	}
 
-	color.Cyan("正在生成 commit message...")
+	color.Cyan("      - 正在调用 AI 生成 commit message...")
 	message, err := internalgcmsg.GenerateCommitMsg(repoRoot, diff)
 	if err == nil {
-		return message, "ai", nil
+		return message, "ai", time.Since(startedAt), nil
 	}
 
 	color.Yellow("⚠ AI 生成失败，使用本地兜底 message: %v", err)
+	color.Cyan("      - 正在生成本地兜底 commit message...")
 	message, fallbackErr := buildFallbackCommitMsgWithMode(repoRoot, true)
 	if fallbackErr != nil {
-		return "", "", fmt.Errorf("生成 commit message 失败: %w", fallbackErr)
+		return "", "", 0, fmt.Errorf("生成 commit message 失败: %w", fallbackErr)
 	}
-	return message, "fallback", nil
+	return message, "fallback", time.Since(startedAt), nil
 }
 
 func isHighQualityCommitMessage(msg string) bool {
@@ -150,4 +163,11 @@ func commitWithMessage(repoRoot, message string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func formatDurationSeconds(d time.Duration) string {
+	if d < time.Second {
+		return d.Round(100 * time.Millisecond).String()
+	}
+	return d.Round(time.Second).String()
 }
