@@ -105,6 +105,7 @@ func ensureDaemonStartWithLog(repoPath string) (string, error) {
 	defer logFile.Close()
 
 	startCmd := exec.Command(exe, "daemon", "start", "--cwd", repoPath)
+	startCmd.Args = append(startCmd.Args, "--idle-timeout", config.DaemonIdleTimeout().String())
 	startCmd.Dir = repoPath
 	startCmd.Stdin = nil
 	startCmd.Stdout = logFile

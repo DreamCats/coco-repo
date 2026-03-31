@@ -31,13 +31,13 @@ var daemonStartCmd = &cobra.Command{
 			daemonCwd = "."
 		}
 
-		var idleTimeout time.Duration
+		idleTimeout := config.DaemonIdleTimeout()
 		if daemonIdleTimeout != "" {
-			var err error
-			idleTimeout, err = time.ParseDuration(daemonIdleTimeout)
+			parsedIdleTimeout, err := time.ParseDuration(daemonIdleTimeout)
 			if err != nil {
 				return fmt.Errorf("无效的 idle-timeout 值: %w", err)
 			}
+			idleTimeout = parsedIdleTimeout
 		}
 
 		// 后台启动
@@ -46,10 +46,7 @@ var daemonStartCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("获取可执行文件路径失败: %w", err)
 			}
-			startArgs := []string{"daemon", "start", "--cwd", daemonCwd}
-			if daemonIdleTimeout != "" {
-				startArgs = append(startArgs, "--idle-timeout", daemonIdleTimeout)
-			}
+			startArgs := []string{"daemon", "start", "--cwd", daemonCwd, "--idle-timeout", idleTimeout.String()}
 			execCmd := exec.Command(exe, startArgs...)
 			execCmd.Stdin = nil
 			execCmd.Stdout = nil
@@ -61,7 +58,7 @@ var daemonStartCmd = &cobra.Command{
 			// 等待 daemon ready
 			time.Sleep(2 * time.Second)
 			if daemon.IsRunningAt(configDir) {
-				fmt.Printf("daemon已在后台启动 (pid=%d)\n", execCmd.Process.Pid)
+				fmt.Printf("daemon已在后台启动 (pid=%d, idle-timeout=%s)\n", execCmd.Process.Pid, idleTimeout)
 			} else {
 				fmt.Println("daemon启动中，请稍后用 status 查看")
 			}

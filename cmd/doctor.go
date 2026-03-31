@@ -481,6 +481,7 @@ func checkDaemon(repoRoot string) doctorCheckResult {
 		fmt.Sprintf("default_model: %s", config.DefaultModel),
 		fmt.Sprintf("prompt_timeout: %s", config.DefaultPromptTimeout),
 		fmt.Sprintf("review_timeout: %s", config.ReviewPromptTimeout),
+		fmt.Sprintf("daemon_idle_timeout: %s", config.DaemonIdleTimeout()),
 	}
 
 	if !acpdaemon.IsRunningAt(configDir) {
@@ -736,7 +737,7 @@ func ensureDaemonRunning(repoRoot string) error {
 		return err
 	}
 
-	cmd := exec.Command(exe, "daemon", "start", "--cwd", repoRoot, "--background")
+	cmd := exec.Command(exe, "daemon", "start", "--cwd", repoRoot, "--background", "--idle-timeout", config.DaemonIdleTimeout().String())
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil

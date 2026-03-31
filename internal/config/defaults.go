@@ -33,10 +33,30 @@ const (
 	ReviewBackgroundPriority = 10
 )
 
+const (
+	// DefaultDaemonIdleTimeout daemon 空闲自动退出时间
+	DefaultDaemonIdleTimeout = 60 * time.Minute
+)
+
 // DefaultConfigDir 返回用户级配置目录
 func DefaultConfigDir() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "coco-ext")
+}
+
+// DaemonIdleTimeout 返回统一的 daemon 空闲超时配置。
+// 可通过 COCO_EXT_DAEMON_IDLE_TIMEOUT 覆盖，格式遵循 time.ParseDuration。
+func DaemonIdleTimeout() time.Duration {
+	raw := os.Getenv("COCO_EXT_DAEMON_IDLE_TIMEOUT")
+	if raw == "" {
+		return DefaultDaemonIdleTimeout
+	}
+
+	if duration, err := time.ParseDuration(raw); err == nil && duration > 0 {
+		return duration
+	}
+
+	return DefaultDaemonIdleTimeout
 }
 
 // KnowledgeFiles 知识文件列表及说明
