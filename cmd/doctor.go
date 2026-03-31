@@ -17,6 +17,7 @@ import (
 
 	acpdaemon "github.com/DreamCats/coco-acp-sdk/daemon"
 	"github.com/DreamCats/coco-ext/internal/config"
+	"github.com/DreamCats/coco-ext/internal/daemonutil"
 	internalgit "github.com/DreamCats/coco-ext/internal/git"
 )
 
@@ -730,6 +731,10 @@ func ensureDaemonRunning(repoRoot string) error {
 			conn.Close()
 			return nil
 		}
+	}
+
+	if _, err := daemonutil.RepairBrokenState(configDir); err != nil {
+		return err
 	}
 
 	exe, err := os.Executable()

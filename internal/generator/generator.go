@@ -11,6 +11,7 @@ import (
 
 	"github.com/DreamCats/coco-acp-sdk/daemon"
 	"github.com/DreamCats/coco-ext/internal/config"
+	"github.com/DreamCats/coco-ext/internal/daemonutil"
 )
 
 // Generator 知识文件生成器
@@ -85,6 +86,15 @@ func ensureDaemonStartWithLog(repoPath string) (string, error) {
 	configDir := config.DefaultConfigDir()
 	if daemon.IsRunningAt(configDir) {
 		return "", nil
+	}
+
+	if repaired, err := daemonutil.RepairBrokenState(configDir); err != nil {
+		return "", fmt.Errorf("清理异常 daemon 状态失败: %w", err)
+	} else if repaired {
+		time.Sleep(300 * time.Millisecond)
+		if daemon.IsRunningAt(configDir) {
+			return "", nil
+		}
 	}
 
 	exe, err := os.Executable()
