@@ -1,6 +1,7 @@
 package daemonutil
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -86,7 +87,7 @@ func terminateProcess(pid int) error {
 }
 
 func isProcessMissing(err error) bool {
-	return err == syscall.ESRCH
+	return err == syscall.ESRCH || errors.Is(err, os.ErrProcessDone)
 }
 
 func removeIfExists(path string) error {
