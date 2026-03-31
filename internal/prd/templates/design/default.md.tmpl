@@ -1,0 +1,28 @@
+# Design
+
+- task_id: {{ .TaskID }}
+- title: {{ .Title }}
+- status: {{ .Status }}
+- complexity: {{ .ComplexityLevel }} ({{ .ComplexityTotal }})
+
+## 调研摘要
+
+{{ .Why }}
+
+## 系统设计
+
+{{- range .SystemDesign }}
+- {{ . }}
+{{- end }}
+
+## 候选实现范围
+
+{{- range .ScopeFiles }}
+- {{ . }}
+{{- end }}
+
+## 风险与备注
+
+{{- range .DesignNotes }}
+- {{ . }}
+{{- end }}

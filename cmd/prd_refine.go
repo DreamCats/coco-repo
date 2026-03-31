@@ -117,7 +117,7 @@ func runPRDRefine(cmd *cobra.Command, args []string) error {
 			case <-firstChunkShown:
 				return
 			case <-ticker.C:
-				fmt.Printf("\r   生成中，已耗时: %s", formatDurationSeconds(time.Since(generateStartedAt)))
+				fmt.Printf("\r\033[K   生成中，已耗时: %s", formatDurationSeconds(time.Since(generateStartedAt)))
 			}
 		}
 	}()
@@ -135,7 +135,7 @@ func runPRDRefine(cmd *cobra.Command, args []string) error {
 
 		streamStarted = true
 		close(firstChunkShown)
-		fmt.Print("\r")
+		clearRefineProgressLine()
 		fmt.Println("   AI 输出（流式）:")
 		fmt.Print(filtered)
 	})
@@ -143,14 +143,19 @@ func runPRDRefine(cmd *cobra.Command, args []string) error {
 	if streamStarted {
 		fmt.Println()
 	} else {
-		fmt.Print("\r")
+		clearRefineProgressLine()
 	}
 	if err != nil {
 		color.Yellow("⚠ AI refine 失败，使用本地兜底内容: %v", err)
 		refinedContent = prd.BuildFallbackRefinedContent(task.Title, task.Source.Content, err)
 	} else {
 		refinedContent = prd.ExtractRefinedContent(refinedContent)
+		if validateErr := prd.ValidateRefinedContent(refinedContent); validateErr != nil {
+			color.Yellow("⚠ AI refine 输出未通过校验，使用本地兜底内容: %v", validateErr)
+			refinedContent = prd.BuildFallbackRefinedContent(task.Title, task.Source.Content, validateErr)
+		}
 	}
+	clearRefineProgressLine()
 	color.Cyan("      生成耗时: %s", formatDurationSeconds(time.Since(generateStartedAt)))
 
 	color.Cyan("   [3/3] 正在写入 task 产物...")
@@ -166,8 +171,12 @@ func runPRDRefine(cmd *cobra.Command, args []string) error {
 	color.Green("⏱ 本次 refine 总耗时: %s", formatDurationSeconds(time.Since(startedAt)))
 
 	if relPath, relErr := filepath.Rel(repoRoot, task.TaskDir); relErr == nil {
-		color.Green("  next: coco-ext prd assess --task %s", filepath.Base(relPath))
+		color.Green("  next: coco-ext prd plan --task %s", filepath.Base(relPath))
 	}
 
 	return nil
+}
+
+func clearRefineProgressLine() {
+	fmt.Print("\r\033[K")
 }

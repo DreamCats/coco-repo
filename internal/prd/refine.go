@@ -17,6 +17,7 @@ import (
 const (
 	TaskStatusInitialized = "initialized"
 	TaskStatusRefined     = "refined"
+	TaskStatusPlanned     = "planned"
 )
 
 type SourceType string
@@ -83,6 +84,7 @@ var (
 	reMDFront   = regexp.MustCompile(`(?m)^title:\s*(.+?)\s*$`)
 	reSlugDash  = regexp.MustCompile(`-+`)
 	reRefinedH1 = regexp.MustCompile(`(?m)^#\s+PRD Refined\s*$`)
+	reSpacing   = regexp.MustCompile(`[ \t]+`)
 )
 
 var zhSlugKeywords = []struct {
@@ -186,7 +188,34 @@ func ExtractRefinedContent(raw string) string {
 	if loc := reRefinedH1.FindStringIndex(normalized); loc != nil {
 		return strings.TrimSpace(normalized[loc[0]:])
 	}
-	return strings.TrimSpace(normalized)
+	return ""
+}
+
+// ValidateRefinedContent 校验 refined PRD 是否满足最小结构要求。
+func ValidateRefinedContent(content string) error {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return fmt.Errorf("refined PRD 为空")
+	}
+	if !strings.HasPrefix(content, "# PRD Refined") {
+		return fmt.Errorf("refined PRD 缺少 # PRD Refined 标题")
+	}
+
+	requiredSections := []string{
+		"## 需求概述",
+		"## 功能点",
+		"## 边界条件",
+		"## 交互与展示",
+		"## 验收标准",
+		"## 业务规则",
+		"## 待确认问题",
+	}
+	for _, section := range requiredSections {
+		if !strings.Contains(content, section) {
+			return fmt.Errorf("refined PRD 缺少必要章节: %s", section)
+		}
+	}
+	return nil
 }
 
 // BuildFallbackRefinedContent 在 AI 不可用时生成结构化的本地兜底内容。
@@ -316,17 +345,19 @@ func resolveSource(input RefineInput) (RefineSource, error) {
 
 	title := strings.TrimSpace(input.Title)
 	if title == "" {
-		title = inferTitleFromContent(raw)
+		title = inferTitleFromContent(normalizeTextInput(raw))
 	}
 	if title == "" {
 		title = "未命名需求"
 	}
 
+	normalizedContent := normalizeTextInput(raw)
+
 	return RefineSource{
 		Type:       SourceTypeText,
 		Title:      title,
 		RawInput:   raw,
-		Content:    raw,
+		Content:    normalizedContent,
 		CapturedAt: input.Now,
 	}, nil
 }
@@ -502,13 +533,29 @@ func inferTitleFromContent(content string) string {
 	return ""
 }
 
+func normalizeTextInput(raw string) string {
+	lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
+	parts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts = append(parts, line)
+	}
+	joined := strings.Join(parts, " ")
+	joined = reSpacing.ReplaceAllString(joined, " ")
+	return strings.TrimSpace(joined)
+}
+
 func trimTitle(raw string) string {
 	raw = strings.TrimSpace(raw)
 	raw = strings.TrimPrefix(raw, "#")
 	raw = strings.TrimSpace(raw)
 	const maxLen = 80
-	if len(raw) > maxLen {
-		raw = strings.TrimSpace(raw[:maxLen])
+	runes := []rune(raw)
+	if len(runes) > maxLen {
+		raw = strings.TrimSpace(string(runes[:maxLen]))
 	}
 	return raw
 }

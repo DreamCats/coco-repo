@@ -29,7 +29,7 @@ var trackedArtifactNames = []string{
 	"source.json",
 	"prd.source.md",
 	"prd-refined.md",
-	"assessment.md",
+	"design.md",
 	"plan.md",
 	"changelog.md",
 	"mr.md",
@@ -156,15 +156,17 @@ func collectArtifacts(taskDir string) ([]ArtifactStatus, []string) {
 
 func suggestNextCommand(taskID, status string, artifacts []ArtifactStatus) string {
 	hasRefined := hasArtifact(artifacts, "prd-refined.md")
-	hasAssessment := hasArtifact(artifacts, "assessment.md")
+	hasDesign := hasArtifact(artifacts, "design.md")
 	hasPlan := hasArtifact(artifacts, "plan.md")
 	hasMR := hasArtifact(artifacts, "mr.md")
 
 	switch {
 	case !hasRefined:
 		return fmt.Sprintf("coco-ext prd refine --task %s --prd .livecoding/tasks/%s/prd.source.md", taskID, taskID)
-	case !hasAssessment || !hasPlan:
-		return fmt.Sprintf("coco-ext prd assess --task %s", taskID)
+	case !hasDesign || !hasPlan:
+		return fmt.Sprintf("coco-ext prd plan --task %s", taskID)
+	case status == TaskStatusPlanned:
+		return "人工 review design.md / plan.md；approve / codegen 尚未实现。"
 	case status == "approved":
 		return fmt.Sprintf("coco-ext prd codegen --task %s", taskID)
 	case !hasMR:

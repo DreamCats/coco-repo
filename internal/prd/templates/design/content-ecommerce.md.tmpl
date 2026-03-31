@@ -1,0 +1,173 @@
+# 【内容电商】技术方案
+
+> 由 coco-ext 自动生成，当前模板：`content-ecommerce`
+>
+> task_id: `{{ .TaskID }}` | 状态：`{{ .Status }}` | 复杂度：`{{ .ComplexityLevel }}`（{{ .ComplexityTotal }} 分）
+
+# 一、背景信息
+
+|  | **信息栏** |
+| --- | --- |
+{{- range .InfoItems }}
+| **{{ .Label }}** | {{ .Value }} |
+{{- end }}
+
+# 二、概要描述
+
+## 2.1 为什么做这个
+
+{{ .Why }}
+
+## 2.2 系统改造点
+
+{{- range .ChangePoints }}
+- {{ . }}
+{{- end }}
+
+# 三、方案设计
+
+## 3.1 系统设计
+
+### 实现范围
+
+{{- range .ScopeFiles }}
+- {{ . }}
+{{- end }}
+
+### 不在本次范围
+
+{{- range .ExcludedScope }}
+- {{ . }}
+{{- end }}
+
+### 方案说明
+
+{{- range .SystemDesign }}
+- {{ . }}
+{{- end }}
+
+{{- if .Diagrams }}
+### 图示设计
+
+{{- range .Diagrams }}
+#### {{ .Title }}
+
+{{- if eq .Type "mermaid" }}
+```mermaid
+{{ .Content }}
+```
+{{- else }}
+```text
+{{ .Content }}
+```
+{{- end }}
+
+{{- end }}
+{{- end }}
+
+{{- if .DesignNotes }}
+### 风险与备注
+
+{{- range .DesignNotes }}
+- {{ . }}
+{{- end }}
+{{- end }}
+
+## 3.2 IDL
+
+{{- range .IDLChanges }}
+- {{ . }}
+{{- end }}
+
+## 3.3 存储&配置变更
+
+{{- range .StorageChanges }}
+- {{ . }}
+{{- end }}
+
+## 3.4 依赖关系变更
+
+{{- range .DependencyChanges }}
+- {{ . }}
+{{- end }}
+
+## 3.5 实验&埋点
+
+{{- range .ExperimentChanges }}
+- {{ . }}
+{{- end }}
+
+{{- if .ShowMultiRegion }}
+## 3.6 多区域支持模式
+
+|  | US | UK | EU | JP | SEA | LATAM |
+| --- | --- | --- | --- | --- | --- | --- |
+| 多区域支持模式 | {{ (index .RegionModes 0).Mode }} | {{ (index .RegionModes 1).Mode }} | {{ (index .RegionModes 2).Mode }} | {{ (index .RegionModes 3).Mode }} | {{ (index .RegionModes 4).Mode }} | {{ (index .RegionModes 5).Mode }} |
+| 备注 | {{ (index .RegionModes 0).Note }} | {{ (index .RegionModes 1).Note }} | {{ (index .RegionModes 2).Note }} | {{ (index .RegionModes 3).Note }} | {{ (index .RegionModes 4).Note }} | {{ (index .RegionModes 5).Note }} |
+{{- end }}
+
+{{- if .ShowRegionIsolation }}
+## 3.7 多区域隔离
+
+{{- range .RegionIsolation }}
+- {{ . }}
+{{- end }}
+{{- end }}
+
+{{- if .ShowCompliance }}
+## 3.8 合规埋点与监控
+
+{{- range .ComplianceNotes }}
+- {{ . }}
+{{- end }}
+{{- end }}
+
+## 3.9 监控&告警
+
+{{- range .MonitoringNotes }}
+- {{ . }}
+{{- end }}
+
+## 3.10 性能&流量评估
+
+{{- range .PerformanceNotes }}
+- {{ . }}
+{{- end }}
+
+## 3.11 给QA的输入
+
+{{- range .QAInputs }}
+- {{ . }}
+{{- end }}
+
+## 3.12 数据合规
+
+- 本次需求不涉及新增数据合规要求。
+
+# 四、上线
+
+## 4.1 上线计划
+
+{{- range .RolloutPlan }}
+- {{ . }}
+{{- end }}
+
+## 4.2 回滚方案
+
+{{- range .RollbackPlan }}
+- {{ . }}
+{{- end }}
+
+# 五、人力评估
+
+| PSM | 改动内容 | 预估人天 | owner |
+| --- | --- | --- | --- |
+{{- range .ManpowerRows }}
+| {{ .PSM }} | {{ .Content }} | {{ .Effort }} | {{ .Owner }} |
+{{- end }}
+
+# 六、项目总结(上线后补充）
+
+{{- range .PostLaunchNotes }}
+- {{ . }}
+{{- end }}

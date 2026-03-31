@@ -21,8 +21,11 @@ const (
 )
 
 const (
-	// DefaultPromptTimeout 默认 AI 请求超时，适用于 gcmsg、context 等短流程
+	// DefaultPromptTimeout 默认 AI 请求超时，适用于 gcmsg 等短流程
 	DefaultPromptTimeout = 30 * time.Second
+
+	// ContextPromptTimeout context init/update 专用超时，允许更长时间生成知识文件
+	ContextPromptTimeout = 5 * time.Minute
 
 	// ReviewPromptTimeout review 专用超时，允许更长时间生成报告
 	ReviewPromptTimeout = 3 * time.Minute

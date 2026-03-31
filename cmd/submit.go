@@ -167,7 +167,11 @@ func commitWithMessage(repoRoot, message string) error {
 
 func formatDurationSeconds(d time.Duration) string {
 	if d < time.Second {
-		return d.Round(100 * time.Millisecond).String()
+		ms := d.Milliseconds()
+		if ms <= 0 {
+			ms = 1
+		}
+		return fmt.Sprintf("%dms", ms)
 	}
 	return d.Round(time.Second).String()
 }

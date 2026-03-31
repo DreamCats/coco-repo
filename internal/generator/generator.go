@@ -40,7 +40,7 @@ func New(repoPath string) (*Generator, error) {
 	}
 
 	// 创建新 session；这一层当前在 coco-acp-sdk 中没有超时保护，必须由上层兜住。
-	sess, err := newSessionWithTimeout(conn, repoPath, config.DefaultPromptTimeout)
+	sess, err := newSessionWithTimeout(conn, repoPath, config.ContextPromptTimeout)
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("创建 session 失败: %w\n建议：执行 `coco-ext daemon stop` 清理卡住的 daemon，再重试。", err)
@@ -152,7 +152,7 @@ func (g *Generator) Generate(name, scanSummary string, onChunk func(string)) (st
 		return "", fmt.Errorf("未知的知识文件: %s", name)
 	}
 
-	result, err := g.executePromptWithTimeout(prompt, config.DefaultPromptTimeout, onChunk)
+	result, err := g.executePromptWithTimeout(prompt, config.ContextPromptTimeout, onChunk)
 	if err != nil {
 		return "", fmt.Errorf("生成 %s 失败: %w", name, err)
 	}
@@ -164,7 +164,7 @@ func (g *Generator) Generate(name, scanSummary string, onChunk func(string)) (st
 func (g *Generator) Update(name, existingContent, diffContent string, onChunk func(string)) (string, error) {
 	prompt := GetUpdatePrompt(name, existingContent, diffContent)
 
-	result, err := g.executePromptWithTimeout(prompt, config.DefaultPromptTimeout, onChunk)
+	result, err := g.executePromptWithTimeout(prompt, config.ContextPromptTimeout, onChunk)
 	if err != nil {
 		return "", fmt.Errorf("更新 %s 失败: %w", name, err)
 	}
@@ -195,16 +195,21 @@ func (g *Generator) PromptWithTimeout(prompt string, timeout time.Duration, onCh
 }
 
 func (g *Generator) executePromptWithTimeout(prompt string, timeout time.Duration, onChunk func(string)) (string, error) {
+	if g == nil || g.conn == nil {
+		return "", fmt.Errorf("daemon 连接不可用，请重新创建 generator 或重试命令")
+	}
+
 	type promptResult struct {
 		content string
 		err     error
 	}
 
 	var result strings.Builder
+	conn := g.conn
 
 	done := make(chan promptResult, 1)
 	go func() {
-		_, err := g.conn.Prompt(
+		_, err := conn.Prompt(
 			prompt,
 			g.modelID,
 			"",
