@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目简介
 
-coco-ext 是一个仓库级知识库生成工具，通过扫描代码仓库结构并借助 LLM（通过 coco-acp-sdk daemon）自动生成 4 个知识文件（glossary.md、architecture.md、patterns.md、gotchas.md），存放在 `.livecoding/context/` 目录下。
+coco-ext 是一个仓库级 AI 开发工作流工具箱，通过扫描代码仓库并借助 LLM（coco-acp-sdk daemon）自动生成知识文件，同时提供 PRD refine/plan、代码 review、commit/push 辅助、本地 metrics 聚合和 AGENTS.md 生成能力。
 
 ## 常用命令
 
@@ -15,8 +15,11 @@ make build
 # 交叉编译（darwin/linux × amd64/arm64）
 make build-all
 
-# 运行测试
-make test            # 等价于 go test ./... -v
+# 运行全部测试
+make test
+
+# 运行单个包的测试
+go test ./internal/scanner/ -v
 
 # 安装到 ~/.local/bin/
 make install
@@ -27,66 +30,86 @@ go mod tidy
 
 ## 架构概览
 
-三层结构：CLI → 业务逻辑 → 外部依赖
+三层结构：CLI（Cobra 命令）→ 业务逻辑（internal/）→ 外部依赖（coco-acp-sdk daemon + git）
 
 ```
-main.go                     # 入口，通过 ldflags 注入版本信息
-cmd/                        # Cobra CLI 命令层
-  root.go                   #   根命令
-  context.go                #   context 子命令（知识库管理）
-  init.go                   #   coco-ext context init
-  update.go                 #   coco-ext context update
-  query.go                  #   coco-ext context query
-  status.go                 #   coco-ext context status
-  review.go                 #   AI Code Review（基于 git diff）
-  gcmsg.go                  #   Commit message 生成（支持 --amend）
-  install.go                #   安装/卸载 git hooks + skills
-  daemon.go                 #   daemon 管理（start/status/stop）
-  version.go                #   版本信息
+main.go                         # 入口，ldflags 注入 version/gitCommit/buildDate
+cmd/                            # Cobra CLI 命令层
+  root.go                       #   根命令，绑定所有子命令
+  context.go / init / update / query / status
+  review.go                     #   AI Code Review（结构化管线）
+  gcmsg.go                      #   Commit message 生成（--amend / --commit-msg-file）
+  submit.go                     #   staged 变更 → commit → push 一键流程
+  push.go                       #   git push 包装，成功后后台 review
+  prd.go / prd_refine / prd_status / prd_plan
+  agents.go                     #   生成 AGENTS.md 行为约束文件
+  doctor.go                     #   环境诊断（--fix 自动修复）
+  metrics.go                    #   本地指标聚合（review/prd/events）
+  install.go                    #   安装/卸载 git hooks + skills
+  daemon.go                     #   daemon 管理（start/status/stop）
+  version.go                    #   版本信息
 internal/
-  config/defaults.go        # 硬编码配置（模型名、目录路径、知识文件定义）
-  scanner/scanner.go        # 仓库扫描引擎（目录树 + Go AST 解析 + IDL 文件）
+  config/defaults.go            # 超时、目录路径、知识文件定义
+  scanner/scanner.go            # 仓库扫描（目录树 + Go AST + IDL）
   generator/
-    generator.go            # 封装 coco-acp-sdk daemon 连接，流式生成
-    prompts.go              # 中文 prompt 模板（每个知识文件一个）
+    generator.go                # coco-acp-sdk daemon 连接，流式生成
+    prompts.go                  # 中文 prompt 模板
   knowledge/
-    reader.go               # 知识文件读取与状态查询
-    writer.go               # 知识文件写入（0600/0700 权限）
+    reader.go                   # 知识文件读取与状态查询
+    writer.go                   # 知识文件写入（0600/0700 权限）
+  git/git.go                    # git diff/branch/commit 封装
+  gcmsg/gcmsg.go                # AI + 本地兜底 commit message 生成
+  review/
+    review.go                   # review 主流程
+    facts.go / scope.go / release.go / impact.go / quality.go / summary.go
+    types.go                    # Finding/FileChange/PipelineResult 等类型
+  prd/
+    refine.go                   # PRD refine（文本/文件/飞书链接 → task 目录）
+    status.go                   # task 状态查询
+    plan.go                     # design.md + plan.md 生成
+    design_template.go          # design 模板
+  metrics/events.go             # 本地事件采集（JSONL 追加写入）
+  changelog/changelog.go        # commit 优化历史
+  daemonutil/daemonutil.go      # daemon 状态修复辅助
 ```
 
 ## 核心流程
 
-**context init**：检查 git 仓库 → `scanner.Scan()` 扫描代码结构 → `generator.New()` 连接 daemon（自动启动）→ 按序生成 4 个知识文件（glossary → architecture → patterns → gotchas）→ 写入 `.livecoding/context/`
+**context init/update**：检查 git 仓库 → `scanner.Scan()` → 连接 daemon → 生成 4 个知识文件（glossary → architecture → patterns → gotchas）→ 写入 `.livecoding/context/`。update 仅更新 git diff 影响部分，返回 "NO_UPDATE" 表示无需更新。
 
-**context update**：获取 git diff → 加载已有知识文件 → 判断哪些文件受影响 → 仅更新变更部分，返回 "NO_UPDATE" 表示无需更新
+**review 管线**：git diff → 5 阶段结构化分析（facts → scope → release → impact → quality）→ summary 汇总 → 输出 report.md + 7 个 JSON 文件到 `.livecoding/review/<branch>-<commit>/`。支持 `--async` 后台运行、`--json` / `--json-only` 结构化输出。
 
-**review 命令**：获取 git diff（最后一个 commit 或分支整体）→ 连接 coco daemon → 生成 review 报告 → 保存到 `.livecoding/review/`
+**gcmsg**：基于 diff 生成 conventional commit message。AI 失败时自动降级到本地兜底（按变更文件名生成）。支持 `--amend`、`--staged`、`--commit-msg-file`。
 
-**gcmsg 命令**：基于当前 commit diff 或暂存区 diff 生成规范 commit message；支持 `--amend` 覆盖上一个 commit，也支持 `--commit-msg-file` 直接写入 Git 的 commit message 文件。AI 失败时会退回本地兜底 message。
+**submit**：仅处理 staged 变更。message 策略：用户高质量 message → AI 生成 → 本地兜底。成功后自动执行 `coco-ext push`。全程记录 metrics 事件。
 
-**submit 命令**：仅处理已 staged 的变更。优先使用用户提供的高质量 message，否则调用 AI 生成；若 AI 失败，则自动使用本地强兜底 message。随后执行 `git commit` 和 `coco-ext push`。
+**push**：先 `git push`，成功后后台 `coco-ext review --async`。替代了不稳定的 pre-push hook 方案。
 
-**install 命令**：安装 commit-msg hook（短 message 自动优化）和 pre-commit hook（goimports 格式化），并从二进制内置资源同步 skills。install 时检测 goimports 是否安装，未安装给出警告，并清理旧的 legacy post-commit / pre-push hook。
+**PRD 工作流**：`prd refine` 接受文本/文件/飞书链接，生成 task 目录（task.json + source.json + prd.source.md + prd-refined.md）。`prd plan` 基于 refined PRD + context 生成 design.md 和 plan.md（含复杂度评估、拟改文件、任务列表）。
 
-**uninstall 命令**：卸载 git hooks 和 skills（仅删除从 coco-ext 安装的部分，不影响其他来源的 skills）。
+**agents**：在仓库根目录生成/更新 AGENTS.md，通过 `<!-- coco-ext-agents:start/end -->` 标记管理 section，支持 `--force` 强制替换。
 
-**commit-msg hook**：检测 `COMMIT_EDITMSG` 第一行是否过短；若过短，则调用 `coco-ext gcmsg --staged --commit-msg-file` 基于暂存区 diff 生成 message 并直接写回文件。优化失败时保留原始 message，不阻塞 commit。
+**doctor**：7 项检查（repository / workspace / hooks / tooling / skills / daemon / logs），`--fix` 可自动修复 hooks、skills、workspace 目录和 daemon。`--json` / `--verbose` 支持详细输出。
 
-**pre-commit hook**：检测暂存区中已修改的 .go 文件，运行 `goimports -w` 格式化后重新 add。
-
-**push 命令**：`coco-ext push` 先执行 `git push`；当 push 成功后，再后台触发 `coco-ext review --async`。这个命令替代了此前不稳定的 `pre-push review` 方案。
-
-**daemon 连接**：通过 `coco-acp-sdk` 的 `daemon.Dial()` 连接，配置目录 `~/.config/coco-ext/`，支持自动启动、流式 prompt、状态查询、关闭。`Prompt` / `Generate` / `Update` 统一带 30 秒超时保护，超时后主动关闭当前连接。
+**metrics**：聚合 `.livecoding/review/`、`.livecoding/tasks/`、`.livecoding/metrics/events.jsonl` 三类数据，输出 review 运行/评级分布、PRD task 状态/复杂度分布、submit/gcmsg 成功率。
 
 ## 关键约定
 
 - Go 模块：`github.com/DreamCats/coco-ext`，Go 1.24.11
 - CLI 框架：Cobra（`spf13/cobra`）
 - 默认模型：`Doubao-Seed-2.0-Code`（字节跳动模型）
-- 知识文件目录：`.livecoding/context/`（已 gitignore）
-- Changelog 目录：`.livecoding/changelog/`（按分支名组织，记录 commit 优化历史）
+- 超时配置（`internal/config/defaults.go`）：
+  - gcmsg：30s（`DefaultPromptTimeout`）
+  - context init/update：5min（`ContextPromptTimeout`）
+  - review：3min（`ReviewPromptTimeout`）
+  - daemon 空闲退出：60min（可通过 `COCO_EXT_DAEMON_IDLE_TIMEOUT` 环境变量覆盖）
+- 目录约定：`.livecoding/context/`（知识库）、`.livecoding/review/`（review 产物）、`.livecoding/tasks/`（PRD task）、`.livecoding/metrics/`（事件日志）、`.livecoding/changelog/`（commit 优化历史）
 - scanner 跳过的目录：.git, .livecoding, vendor, node_modules, kitex_gen, dist, .idea, .vscode
 - prompt 和用户界面均为中文
 - 版本信息通过 Makefile ldflags 注入到 main 包变量
-- `review --async` 会真正拉起后台子进程，主进程立即返回日志路径和报告目录
-- `review` 使用 3 分钟专用超时；`gcmsg` / `context` 仍使用 30 秒默认超时
+- review `--async` 拉起后台子进程，主进程立即返回日志路径和报告目录
+- daemon 连接通过 `coco-acp-sdk` 的 `daemon.Dial()`，配置目录 `~/.config/coco-ext/`，支持自动启动
+- `Prompt` / `Generate` / `Update` 统一超时保护，超时后主动关闭连接
+- skills 安装到 `~/.trae/skills/`，由 `cmd/embedded_skills.go` 从二进制内置资源同步
+- commit-msg hook：`COMMIT_EDITMSG` 第一行 < 10 字符时触发 AI 优化
+- pre-commit hook：暂存区 .go 文件自动 goimports 格式化

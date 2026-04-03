@@ -37,6 +37,17 @@ const (
 )
 
 const (
+	// LintConfigDir golangci-lint 配置文件目录（在仓库根目录下）
+	LintConfigDir = ".livecoding/config"
+
+	// LintConfigFile golangci-lint 配置文件名
+	LintConfigFile = ".golangci.yml"
+
+	// LintOutputDir lint 产物输出目录
+	LintOutputDir = ".livecoding/lint"
+)
+
+const (
 	// DefaultDaemonIdleTimeout daemon 空闲自动退出时间
 	DefaultDaemonIdleTimeout = 60 * time.Minute
 )

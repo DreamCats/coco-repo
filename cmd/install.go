@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DreamCats/coco-ext/internal/config"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -55,6 +56,10 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		if err := syncSkills(); err != nil {
 			return err
 		}
+	}
+
+	if err := installLintConfig(repoRoot); err != nil {
+		color.Yellow("⚠ 安装 golangci-lint 配置失败: %v", err)
 	}
 
 	color.Green("✓ 安装完成")
@@ -544,5 +549,62 @@ func removeSkills() error {
 	}
 
 	color.Green("✓ skills 卸载完成")
+	return nil
+}
+
+const defaultGolangciYML = `run:
+  timeout: 3m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+    - gocritic
+    - gofmt
+    - goimports
+
+linters-settings:
+  govet:
+    enable-all: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+`
+
+func installLintConfig(repoRoot string) error {
+	configDir := filepath.Join(repoRoot, config.LintConfigDir)
+	configPath := filepath.Join(configDir, config.LintConfigFile)
+
+	// 如果已存在，不覆盖用户定制
+	if _, err := os.Stat(configPath); err == nil {
+		color.Green("✓ golangci-lint 配置已存在: %s", configPath)
+		return nil
+	}
+
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("创建配置目录失败: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, []byte(defaultGolangciYML), 0644); err != nil {
+		return fmt.Errorf("写入 golangci-lint 配置失败: %w", err)
+	}
+
+	color.Green("✓ golangci-lint 默认配置已生成: %s", configPath)
+
+	// 检测 golangci-lint 是否安装
+	if !isCommandAvailable("golangci-lint") {
+		color.Yellow("⚠ golangci-lint 未安装，lint 相关功能将跳过")
+		color.Yellow("  安装: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest")
+	} else {
+		color.Green("✓ golangci-lint 已安装")
+	}
+
 	return nil
 }

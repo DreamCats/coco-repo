@@ -7,6 +7,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+
+	internallint "github.com/DreamCats/coco-ext/internal/lint"
 )
 
 var pushCmd = &cobra.Command{
@@ -52,6 +54,13 @@ func triggerPushFlow(repoRoot string, args []string) error {
 
 	if err := startReviewAsync(repoRoot, ""); err != nil {
 		return fmt.Errorf("push 成功，但启动后台 review 失败: %w", err)
+	}
+
+	// golangci-lint 可用时，异步触发 lint
+	if internallint.IsGolangciLintAvailable() {
+		if err := startLintAsync(repoRoot); err != nil {
+			color.Yellow("⚠ 后台 lint 启动失败: %v", err)
+		}
 	}
 
 	return nil

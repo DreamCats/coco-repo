@@ -38,6 +38,7 @@ const (
 	doctorCheckSkills     = "skills"
 	doctorCheckDaemon     = "daemon"
 	doctorCheckLogs       = "logs"
+	doctorCheckLint       = "lint"
 )
 
 type doctorCheckResult struct {
@@ -126,13 +127,14 @@ func collectDoctorReport(repoRoot string) doctorReport {
 }
 
 func runDoctorChecks(repoRoot string) []doctorCheckResult {
-	results := make([]doctorCheckResult, 0, 7)
+	results := make([]doctorCheckResult, 0, 8)
 
 	isGitRepo := internalgit.IsGitRepo(repoRoot)
 	results = append(results, checkRepository(repoRoot, isGitRepo))
 	results = append(results, checkWorkspace(repoRoot, isGitRepo))
 	results = append(results, checkHooks(repoRoot, isGitRepo))
 	results = append(results, checkTooling())
+	results = append(results, checkLint(repoRoot, isGitRepo))
 	results = append(results, checkSkills())
 	results = append(results, checkDaemon(repoRoot))
 	results = append(results, checkLogs(repoRoot, isGitRepo))
@@ -317,6 +319,58 @@ func checkHooks(repoRoot string, isGitRepo bool) doctorCheckResult {
 			Summary: "hooks 状态正常",
 			Details: details,
 		}
+	}
+}
+
+func checkLint(repoRoot string, isGitRepo bool) doctorCheckResult {
+	if !isGitRepo {
+		return doctorCheckResult{
+			Name:    "lint",
+			Status:  doctorStatusSkip,
+			Summary: "非 git 仓库，跳过 lint 检查",
+		}
+	}
+
+	details := make([]string, 0, 3)
+	configPath := filepath.Join(repoRoot, config.LintConfigDir, config.LintConfigFile)
+
+	if isCommandAvailable("golangci-lint") {
+		details = append(details, "golangci-lint: ok")
+	} else {
+		details = append(details, "golangci-lint: missing")
+	}
+
+	if _, err := os.Stat(configPath); err == nil {
+		details = append(details, fmt.Sprintf("config: %s", configPath))
+	} else {
+		details = append(details, "config: missing")
+	}
+
+	if !isCommandAvailable("golangci-lint") {
+		return doctorCheckResult{
+			Name:    "lint",
+			Status:  doctorStatusWarn,
+			Summary: "golangci-lint 未安装，lint 功能将跳过",
+			Details: details,
+			FixHint: "安装: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest",
+		}
+	}
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return doctorCheckResult{
+			Name:    "lint",
+			Status:  doctorStatusWarn,
+			Summary: "golangci-lint 配置文件不存在",
+			Details: details,
+			FixHint: "执行 coco-ext doctor --fix 或 coco-ext install 生成默认配置。",
+		}
+	}
+
+	return doctorCheckResult{
+		Name:    "lint",
+		Status:  doctorStatusPass,
+		Summary: "golangci-lint 状态正常",
+		Details: details,
 	}
 }
 
@@ -683,6 +737,14 @@ func applyDoctorFixes(repoRoot string, report *doctorReport) {
 					fixErrors = append(fixErrors, "daemon: "+err.Error())
 				} else {
 					fixActions = append(fixActions, "已尝试后台启动 daemon")
+				}
+			}
+		case doctorCheckLint:
+			if result.Status == doctorStatusWarn && isGitRepo {
+				if err := installLintConfig(repoRoot); err != nil {
+					fixErrors = append(fixErrors, "lint: "+err.Error())
+				} else {
+					fixActions = append(fixActions, "已生成 golangci-lint 默认配置")
 				}
 			}
 		}
