@@ -54,6 +54,21 @@ func renderFactsSummary(facts Facts) string {
 	if len(facts.SensitiveFindings) > 0 {
 		lines = append(lines, "- 敏感信息风险: "+strings.Join(facts.SensitiveFindings, "; "))
 	}
+	if len(facts.LintIssues) > 0 {
+		linterCounts := make(map[string]int)
+		for _, issue := range facts.LintIssues {
+			linterCounts[issue.FromLinter]++
+		}
+		var parts []string
+		for linter, count := range linterCounts {
+			parts = append(parts, fmt.Sprintf("%s %d 个", linter, count))
+		}
+		summary := "- golangci-lint 已发现问题: " + strings.Join(parts, ", ")
+		if facts.LintOutputDir != "" {
+			summary += " (详情: " + facts.LintOutputDir + ")"
+		}
+		lines = append(lines, summary)
+	}
 	if len(lines) == 0 {
 		return "- 未检测到额外的程序化风险信号"
 	}

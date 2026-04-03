@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/DreamCats/coco-ext/internal/git"
+	"github.com/DreamCats/coco-ext/internal/lint"
 )
 
 var exportedFuncPattern = regexp.MustCompile(`^func\s+(\([^)]+\)\s*)?([A-Z][A-Za-z0-9_]*)\s*\(`)
@@ -73,6 +74,11 @@ func CollectFacts(repoRoot string, diffInfo *git.DiffInfo) Facts {
 				fmt.Sprintf("%s: %s", file.Path, sig),
 			)
 		}
+	}
+
+	// 加载最近一次 lint 结果作为 review 输入
+	if lintResult := lint.LoadLatestResult(repoRoot); lintResult != nil && lintResult.Total > 0 {
+		facts.LintIssues = lintResult.Issues
 	}
 
 	return facts

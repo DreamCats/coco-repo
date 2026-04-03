@@ -29,6 +29,7 @@ type metricsReport struct {
 	RepoRoot     string         `json:"repo_root"`
 	GeneratedAt  string         `json:"generated_at"`
 	Review       reviewMetrics  `json:"review"`
+	Lint         lintMetrics    `json:"lint"`
 	PRD          prdMetrics     `json:"prd"`
 	Events       eventMetrics   `json:"events"`
 	Recommendations []string    `json:"recommendations"`
@@ -42,6 +43,13 @@ type reviewMetrics struct {
 	P1Count         int            `json:"p1_count"`
 	P2Count         int            `json:"p2_count"`
 	TotalFindings   int            `json:"total_findings"`
+	LatestOutputDir string         `json:"latest_output_dir,omitempty"`
+}
+
+type lintMetrics struct {
+	TotalRuns       int            `json:"total_runs"`
+	TotalIssues     int            `json:"total_issues"`
+	LinterCounts    map[string]int `json:"linter_counts"`
 	LatestOutputDir string         `json:"latest_output_dir,omitempty"`
 }
 
@@ -63,6 +71,10 @@ type eventMetrics struct {
 	GCMsgSuccess           int            `json:"gcmsg_success"`
 	GCMsgFailure           int            `json:"gcmsg_failure"`
 	GCMsgMessageSources    map[string]int `json:"gcmsg_message_sources"`
+	ReviewTotal            int            `json:"review_total"`
+	ReviewSuccess          int            `json:"review_success"`
+	ReviewFailure          int            `json:"review_failure"`
+	ReviewRatingCounts     map[string]int `json:"review_rating_counts"`
 	LatestEventTime        string         `json:"latest_event_time,omitempty"`
 }
 
@@ -104,6 +116,7 @@ func runMetrics(cmd *cobra.Command, args []string) error {
 		RepoRoot:        repoRoot,
 		GeneratedAt:     time.Now().Format(time.RFC3339),
 		Review:          collectReviewMetrics(repoRoot),
+		Lint:            collectLintMetrics(repoRoot),
 		PRD:             collectPRDMetrics(repoRoot),
 		Events:          collectEventMetrics(repoRoot),
 		Recommendations: buildMetricsRecommendations(repoRoot),
@@ -179,6 +192,63 @@ func collectReviewMetrics(repoRoot string) reviewMetrics {
 		result.P1Count += summary.P1Count
 		result.P2Count += summary.P2Count
 		result.TotalFindings += summary.TotalFindings
+	}
+
+	return result
+}
+
+func collectLintMetrics(repoRoot string) lintMetrics {
+	result := lintMetrics{
+		LinterCounts: map[string]int{},
+	}
+
+	lintRoot := filepath.Join(repoRoot, config.LintOutputDir)
+	entries, err := os.ReadDir(lintRoot)
+	if err != nil {
+		return result
+	}
+
+	type lintEntry struct {
+		name    string
+		modTime time.Time
+	}
+	dirs := make([]lintEntry, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		dirs = append(dirs, lintEntry{name: entry.Name(), modTime: info.ModTime()})
+	}
+
+	sort.Slice(dirs, func(i, j int) bool {
+		return dirs[i].modTime.After(dirs[j].modTime)
+	})
+	if len(dirs) > 0 {
+		result.LatestOutputDir = filepath.Join(lintRoot, dirs[0].name)
+	}
+
+	for _, dir := range dirs {
+		lintPath := filepath.Join(lintRoot, dir.name, "lint.json")
+		data, err := os.ReadFile(lintPath)
+		if err != nil {
+			continue
+		}
+		var lintResult struct {
+			Total     int            `json:"total"`
+			LinterMap map[string]int `json:"linter_counts"`
+		}
+		if err := json.Unmarshal(data, &lintResult); err != nil {
+			continue
+		}
+		result.TotalRuns++
+		result.TotalIssues += lintResult.Total
+		for linter, count := range lintResult.LinterMap {
+			result.LinterCounts[linter] += count
+		}
 	}
 
 	return result
@@ -275,6 +345,7 @@ func collectEventMetrics(repoRoot string) eventMetrics {
 	result := eventMetrics{
 		SubmitMessageSources: map[string]int{},
 		GCMsgMessageSources:  map[string]int{},
+		ReviewRatingCounts:   map[string]int{},
 	}
 
 	eventsPath := filepath.Join(repoRoot, ".livecoding", "metrics", "events.jsonl")
@@ -319,6 +390,16 @@ func collectEventMetrics(repoRoot string) eventMetrics {
 			if source, ok := readStringField(event.Fields, "message_source"); ok && source != "" {
 				result.GCMsgMessageSources[source]++
 			}
+		case "review":
+			result.ReviewTotal++
+			if event.Success {
+				result.ReviewSuccess++
+			} else {
+				result.ReviewFailure++
+			}
+			if rating, ok := readStringField(event.Fields, "rating"); ok && rating != "" {
+				result.ReviewRatingCounts[rating]++
+			}
 		}
 	}
 
@@ -360,12 +441,23 @@ func renderMetrics(report metricsReport) {
 	color.Green("   complexity_counts: %s", formatCountMap(report.PRD.ComplexityCounts))
 	fmt.Println()
 
+	color.Green("Lint")
+	color.Green("   total_runs: %d", report.Lint.TotalRuns)
+	color.Green("   total_issues: %d", report.Lint.TotalIssues)
+	color.Green("   linter_counts: %s", formatCountMap(report.Lint.LinterCounts))
+	if report.Lint.LatestOutputDir != "" {
+		color.Green("   latest_output: %s", report.Lint.LatestOutputDir)
+	}
+	fmt.Println()
+
 	color.Green("Events")
 	color.Green("   total_events: %d", report.Events.TotalEvents)
 	color.Green("   submit: total=%d success=%d failure=%d", report.Events.SubmitTotal, report.Events.SubmitSuccess, report.Events.SubmitFailure)
 	color.Green("   submit_message_sources: %s", formatCountMap(report.Events.SubmitMessageSources))
 	color.Green("   gcmsg: total=%d success=%d failure=%d", report.Events.GCMsgTotal, report.Events.GCMsgSuccess, report.Events.GCMsgFailure)
 	color.Green("   gcmsg_message_sources: %s", formatCountMap(report.Events.GCMsgMessageSources))
+	color.Green("   review: total=%d success=%d failure=%d", report.Events.ReviewTotal, report.Events.ReviewSuccess, report.Events.ReviewFailure)
+	color.Green("   review_rating_counts: %s", formatCountMap(report.Events.ReviewRatingCounts))
 	if report.Events.LatestEventTime != "" {
 		color.Green("   latest_event: %s", report.Events.LatestEventTime)
 	}

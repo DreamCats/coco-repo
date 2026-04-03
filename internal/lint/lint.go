@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/DreamCats/coco-ext/internal/config"
 )
@@ -89,6 +91,51 @@ func parseLintResult(rawJSON string) (*LintResult, error) {
 	}
 
 	return result, nil
+}
+
+// LoadLatestResult 从 .livecoding/lint/ 读取最近一次 lint 结果。
+// 如果没有找到有效结果，返回 nil。
+func LoadLatestResult(repoRoot string) *LintResult {
+	lintRoot := filepath.Join(repoRoot, config.LintOutputDir)
+	entries, err := os.ReadDir(lintRoot)
+	if err != nil {
+		return nil
+	}
+
+	type dirInfo struct {
+		name    string
+		modTime time.Time
+	}
+	dirs := make([]dirInfo, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		dirs = append(dirs, dirInfo{name: entry.Name(), modTime: info.ModTime()})
+	}
+	if len(dirs) == 0 {
+		return nil
+	}
+
+	sort.Slice(dirs, func(i, j int) bool {
+		return dirs[i].modTime.After(dirs[j].modTime)
+	})
+
+	latestPath := filepath.Join(lintRoot, dirs[0].name, "lint.json")
+	data, err := os.ReadFile(latestPath)
+	if err != nil {
+		return nil
+	}
+
+	var result LintResult
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil
+	}
+	return &result
 }
 
 // WriteResult 将 lint 结果写入指定输出目录

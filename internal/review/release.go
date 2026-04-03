@@ -109,6 +109,30 @@ func AnalyzeRelease(facts Facts) ReleaseResult {
 		})
 	}
 
+	if len(facts.LintIssues) > 0 {
+		linterCounts := make(map[string]int)
+		for _, issue := range facts.LintIssues {
+			linterCounts[issue.FromLinter]++
+		}
+		var parts []string
+		for linter, count := range linterCounts {
+			parts = append(parts, fmt.Sprintf("%s: %d", linter, count))
+		}
+		severity := SeverityP2
+		if facts.LintIssues != nil && len(facts.LintIssues) > 10 {
+			severity = SeverityP0
+		} else if facts.LintIssues != nil && len(facts.LintIssues) > 5 {
+			severity = SeverityP1
+		}
+		result.Findings = append(result.Findings, Finding{
+			Severity:   severity,
+			Source:     "lint",
+			Title:      "golangci-lint 发现代码风格问题",
+			Detail:     fmt.Sprintf("共 %d 个 lint issue（按 linter：%s）", len(facts.LintIssues), strings.Join(parts, ", ")),
+			Suggestion: "建议在提交前处理高优先级 lint issue。",
+		})
+	}
+
 	return result
 }
 

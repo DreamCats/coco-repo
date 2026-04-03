@@ -15,6 +15,7 @@ import (
 	"github.com/DreamCats/coco-ext/internal/config"
 	"github.com/DreamCats/coco-ext/internal/generator"
 	"github.com/DreamCats/coco-ext/internal/git"
+	internalmetrics "github.com/DreamCats/coco-ext/internal/metrics"
 	"github.com/DreamCats/coco-ext/internal/review"
 )
 
@@ -176,6 +177,14 @@ func runReview(cmd *cobra.Command, args []string) error {
 	color.Green("\n✓ Review 完成!")
 	color.Green("报告已生成: %s", reportPath)
 	color.Green("Review finished at: %s", time.Now().Format("2006-01-02 15:04:05"))
+
+	_ = internalmetrics.AppendEvent(repoRoot, internalmetrics.Event{
+		Type:    "review",
+		Success: true,
+		Fields: map[string]any{
+			"duration_ms": time.Since(startedAt).Milliseconds(),
+		},
+	})
 
 	return nil
 }

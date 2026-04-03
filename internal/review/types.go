@@ -1,6 +1,9 @@
 package review
 
-import "github.com/DreamCats/coco-ext/internal/git"
+import (
+	"github.com/DreamCats/coco-ext/internal/git"
+	"github.com/DreamCats/coco-ext/internal/lint"
+)
 
 type Severity string
 
@@ -53,6 +56,8 @@ type Facts struct {
 	MissingTests          []string
 	LargeFiles            []string
 	TotalChangedLines     int
+	LintIssues            []lint.LintIssue
+	LintOutputDir         string
 }
 
 type ScopeResult struct {
