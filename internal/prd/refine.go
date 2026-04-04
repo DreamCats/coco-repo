@@ -63,6 +63,7 @@ type RefineSource struct {
 	URL        string
 	DocToken   string
 	CapturedAt time.Time
+	LarkErr    error // lark-cli 拉取失败时的错误信息，用于在 cmd 层展示提示
 }
 
 type RefineTask struct {
@@ -297,6 +298,17 @@ func resolveSource(input RefineInput) (RefineSource, error) {
 		}
 
 		title := strings.TrimSpace(input.Title)
+
+		// 尝试通过 lark-cli 拉取飞书文档内容
+		var content string
+		larkContent, larkTitle, larkErr := FetchLarkDocContent(raw)
+		if larkErr == nil {
+			content = larkContent
+			if title == "" && larkTitle != "" {
+				title = larkTitle
+			}
+		}
+
 		if title == "" {
 			title = inferTitleFromURL(u)
 		}
@@ -308,10 +320,11 @@ func resolveSource(input RefineInput) (RefineSource, error) {
 			Type:       SourceTypeLarkDoc,
 			Title:      title,
 			RawInput:   raw,
-			Content:    "",
+			Content:    content,
 			URL:        raw,
 			DocToken:   extractDocToken(raw),
 			CapturedAt: input.Now,
+			LarkErr:    larkErr,
 		}, nil
 	}
 
@@ -568,8 +581,12 @@ func inferTitleFromURL(u *url.URL) string {
 }
 
 func extractDocToken(rawURL string) string {
-	matches := reDocToken.FindStringSubmatch(rawURL)
-	if len(matches) > 1 {
+	// 优先匹配 /docx?/TOKEN
+	if matches := reDocToken.FindStringSubmatch(rawURL); len(matches) > 1 {
+		return matches[1]
+	}
+	// 其次匹配 /wiki/TOKEN
+	if matches := reWikiToken.FindStringSubmatch(rawURL); len(matches) > 1 {
 		return matches[1]
 	}
 	return ""

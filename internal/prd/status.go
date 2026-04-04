@@ -31,8 +31,6 @@ var trackedArtifactNames = []string{
 	"prd-refined.md",
 	"design.md",
 	"plan.md",
-	"changelog.md",
-	"mr.md",
 }
 
 // LoadTaskStatus 加载指定 task 的状态信息。
@@ -158,7 +156,6 @@ func suggestNextCommand(taskID, status string, artifacts []ArtifactStatus) strin
 	hasRefined := hasArtifact(artifacts, "prd-refined.md")
 	hasDesign := hasArtifact(artifacts, "design.md")
 	hasPlan := hasArtifact(artifacts, "plan.md")
-	hasMR := hasArtifact(artifacts, "mr.md")
 
 	switch {
 	case !hasRefined:
@@ -166,11 +163,7 @@ func suggestNextCommand(taskID, status string, artifacts []ArtifactStatus) strin
 	case !hasDesign || !hasPlan:
 		return fmt.Sprintf("coco-ext prd plan --task %s", taskID)
 	case status == TaskStatusPlanned:
-		return "人工 review design.md / plan.md；approve / codegen 尚未实现。"
-	case status == "approved":
-		return fmt.Sprintf("coco-ext prd codegen --task %s", taskID)
-	case !hasMR:
-		return fmt.Sprintf("coco-ext prd mr --task %s", taskID)
+		return "已完成规划，请人工 review design.md / plan.md。"
 	default:
 		return "当前 task 无明确下一步，建议人工确认状态。"
 	}

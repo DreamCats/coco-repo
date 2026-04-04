@@ -68,7 +68,10 @@ func runPRDRefine(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		color.Yellow("⚠ 当前来源已记录，但尚未获取正文内容")
+		color.Yellow("⚠ 当前来源已记录，但未能获取正文内容")
+		if task.Source.LarkErr != nil {
+			color.Yellow("  原因: %v", task.Source.LarkErr)
+		}
 		color.Yellow("  source.json: %s", task.SourceMetaPath)
 		color.Yellow("  prd.source.md: %s", task.SourcePath)
 		color.Yellow("  prd-refined.md: %s", task.RefinedPath)
